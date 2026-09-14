@@ -18,7 +18,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 TICKS = 400
+RELAY_TICKS = 100
 SEED = 20260913
+LANES = ["naive", "chunked", "metal", "fused"]
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +31,18 @@ def pack():
 @pytest.fixture(scope="module")
 def stim(pack):
     return core.make_stimulus(pack, n_ticks=TICKS, seed=SEED)
+
+
+def run_lane(lane, pack, stim, silenced=None):
+    from lif import engine_chunked, engine_fused, engine_metal, engine_naive
+
+    return {
+        "naive": lambda: engine_naive.run(pack, stim, silenced=silenced, warmup=0),
+        "chunked": lambda: engine_chunked.run(pack, stim, silenced=silenced, chunk=32, warmup=0),
+        "metal": lambda: engine_metal.run(pack, stim, silenced=silenced, chunk=32, warmup=0),
+        "fused": lambda: engine_fused.run(pack, stim, silenced=silenced, chunk=32, warmup=0,
+                                          edge_split=1),
+    }[lane]()
 
 
 def test_pack_is_consistent(pack):
@@ -44,20 +58,148 @@ def test_pack_is_consistent(pack):
 @pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
 def test_lane_matches_naive(pack, stim, lane):
     """Every optimisation must reproduce the baseline exactly -- the phase-3 gate."""
-    from lif import engine_chunked, engine_fused, engine_metal, engine_naive
-
-    ref = engine_naive.run(pack, stim, warmup=0)
-    got = {
-        "chunked": lambda: engine_chunked.run(pack, stim, chunk=32, warmup=0),
-        "metal": lambda: engine_metal.run(pack, stim, chunk=32, warmup=0),
-        "fused": lambda: engine_fused.run(pack, stim, chunk=32, warmup=0, edge_split=1),
-    }[lane]()
+    ref = run_lane("naive", pack, stim)
+    got = run_lane(lane, pack, stim)
 
     assert got.counts_sha256() == ref.counts_sha256()
     assert np.array_equal(got.v_final, ref.v_final)
     assert np.array_equal(got.g_final, ref.g_final)
 
 
+# ---------------------------------------------------------------- silencing
+def _top_out_degree(pack, candidates, n=10):
+    """The n highest out-degree neurons among candidates, tie-broken by index."""
+    candidates = np.asarray(candidates)
+    return candidates[np.lexsort((candidates, -pack.out_degree[candidates]))][:n]
+
+
+@pytest.fixture(scope="module", params=["sugar", "hubs"])
+def silencing_case(request, pack, stim):
+    """A stimulus, a silencing mask, and the naive runs without and with it.
+
+    The design asked for the 10 highest out-degree neurons under the sugar
+    stimulus. Those neurons never fire under it (0 spikes at 400 and at 10,000
+    ticks), so silencing them changes nothing and parity would hold vacuously.
+    Two cases instead:
+      sugar  the 10 highest out-degree neurons among those that do fire under
+             the sugar drive
+      hubs   the 10 highest out-degree neurons overall under the 100-hub drive,
+             which excites them directly, so excitation and silencing overlap
+    """
+    import mlx.core as mx
+
+    from lif import engine_naive, stimulus_flybrain
+
+    if request.param == "sugar":
+        targets = stimulus_flybrain.targets(pack.neuron_ids)
+        draws = stimulus_flybrain.bernoulli(len(targets), TICKS, 150.0, core.DT, SEED)
+        case_stim = core.Stimulus(targets=targets, draws=mx.array(draws), n_ticks=TICKS,
+                                  rate_hz=150.0, seed=SEED)
+        base = engine_naive.run(pack, case_stim, warmup=0)
+        chosen = _top_out_degree(pack, np.nonzero(base.spike_counts > 0)[0])
+    else:
+        case_stim = stim
+        base = engine_naive.run(pack, case_stim, warmup=0)
+        chosen = _top_out_degree(pack, np.arange(pack.n_neurons))
+
+    mask = np.zeros(pack.n_neurons, dtype=bool)
+    mask[chosen] = True
+    ref = engine_naive.run(pack, case_stim, silenced=mask, warmup=0)
+    return case_stim, mask, base, ref
+
+
+@pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
+def test_silencing_matches_naive(pack, silencing_case, lane):
+    """Two implementations of one semantics must agree: a masked copy of the
+    edge counts (naive, chunked) and an early exit in the kernel (metal, fused)."""
+    case_stim, mask, _, ref = silencing_case
+    got = run_lane(lane, pack, case_stim, silenced=mask)
+
+    assert got.counts_sha256() == ref.counts_sha256()
+    assert np.array_equal(got.v_final, ref.v_final)
+    assert np.array_equal(got.g_final, ref.g_final)
+
+
+def test_silencing_changes_the_result(silencing_case):
+    """Guards the parity test above against passing because nothing was silenced."""
+    _, mask, base, ref = silencing_case
+    assert base.spike_counts[mask].sum() > 0, "the silenced neurons must fire"
+    assert ref.total_spikes() != base.total_spikes()
+
+
+@pytest.fixture(scope="module")
+def relay(pack):
+    """A source S whose single target T has no other input, and a drive on S alone.
+
+    The design placed this on the 800-neuron validation subnetwork, where it
+    does not exist: no neuron there has out-degree 1 into a single-input
+    target, and all 114 single-input neurons are fed by an inhibitory seed hub,
+    so they could never fire. The full pack has 56 excitatory pairs of this
+    shape; this takes the one with the most contacts.
+    """
+    import mlx.core as mx
+
+    rp = np.asarray(pack.row_ptr)
+    dst = np.asarray(pack.destinations)
+    cnt = np.asarray(pack.signed_counts)
+    in_degree = np.bincount(dst, minlength=pack.n_neurons)
+    src = np.nonzero(pack.out_degree == 1)[0]
+    tgt, contacts = dst[rp[src]], cnt[rp[src]]
+    ok = (in_degree[tgt] == 1) & (tgt != src) & (contacts > 0)
+    src, tgt, contacts = src[ok], tgt[ok], contacts[ok]
+    best = np.lexsort((src, -contacts))[0]
+
+    # One input every other tick. Each lifts S by 68.75 mV, S fires on the next
+    # tick, so S alone produces exactly one spike per draw.
+    draws = np.zeros((RELAY_TICKS, 1), dtype=bool)
+    draws[::2, 0] = True
+    relay_stim = core.Stimulus(targets=np.array([src[best]], dtype=np.int32),
+                               draws=mx.array(draws), n_ticks=RELAY_TICKS,
+                               rate_hz=float("nan"), seed=-1)
+    return int(src[best]), int(tgt[best]), relay_stim, int(draws.sum())
+
+
+@pytest.mark.parametrize("lane", LANES)
+def test_silenced_source_still_fires_but_delivers_nothing(pack, relay, lane):
+    s, t, relay_stim, n_draws = relay
+    base = run_lane(lane, pack, relay_stim)
+    assert base.spike_counts[t] > 0, "T must fire from S alone, or silencing S proves nothing"
+
+    mask = np.zeros(pack.n_neurons, dtype=bool)
+    mask[s] = True
+    got = run_lane(lane, pack, relay_stim, silenced=mask)
+
+    assert got.spike_counts[s] == n_draws
+    assert got.spike_counts[t] == 0
+    assert got.total_spikes() == n_draws, "no other neuron may receive anything"
+
+
+@pytest.mark.parametrize("lane", LANES)
+def test_silenced_neuron_still_receives_input(pack, relay, lane):
+    """Silencing is outgoing only, as upstream's model.py does it; its README
+    says "to and from". A silenced T still integrates S's input and fires."""
+    s, t, relay_stim, _ = relay
+    base = run_lane(lane, pack, relay_stim)
+
+    mask = np.zeros(pack.n_neurons, dtype=bool)
+    mask[t] = True
+    got = run_lane(lane, pack, relay_stim, silenced=mask)
+
+    assert base.spike_counts[t] > 0
+    assert got.spike_counts[t] == base.spike_counts[t]
+
+
+@pytest.mark.parametrize("lane", LANES)
+def test_silenced_must_be_a_bool_mask_over_all_neurons(pack, stim, lane):
+    """An index list passed where the mask belongs would otherwise be read out
+    of bounds, silently, by the kernel lanes."""
+    with pytest.raises(ValueError):
+        run_lane(lane, pack, stim, silenced=np.array([3, 7]))
+    with pytest.raises(ValueError):
+        run_lane(lane, pack, stim, silenced=np.zeros(pack.n_neurons - 1, dtype=bool))
+
+
+# ---------------------------------------------------------------- kernel
 def test_metal_kernel_is_deterministic(pack):
     """int32 atomics must be order-independent, or the parity gate is luck."""
     import mlx.core as mx
@@ -67,23 +209,29 @@ def test_metal_kernel_is_deterministic(pack):
     rng = np.random.default_rng(7)
     spike = mx.array(rng.random(pack.n_neurons) < 0.01)
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    runs = [np.asarray(engine_metal.propagate(spike, pack, n_src)) for _ in range(5)]
+    runs = [np.asarray(engine_metal.propagate(spike, pack, n_src, silenced=None))
+            for _ in range(5)]
     for other in runs[1:]:
         assert np.array_equal(runs[0], other)
 
 
-def test_metal_kernel_matches_dense_formulation(pack):
-    """The hand-written kernel must equal the pure-MLX scatter it replaces."""
+@pytest.mark.parametrize("masked", [False, True])
+def test_metal_kernel_matches_dense_formulation(pack, masked):
+    """The hand-written kernel must equal the pure-MLX scatter it replaces, in
+    both of its variants: without a silencing mask and with one."""
     import mlx.core as mx
 
     from lif import engine_metal
 
     rng = np.random.default_rng(3)
     spike = mx.array(rng.random(pack.n_neurons) < 0.002)
+    silenced = mx.array(rng.random(pack.n_neurons) < 0.5) if masked else None
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    got = engine_metal.propagate(spike, pack, n_src)
+    got = engine_metal.propagate(spike, pack, n_src, silenced=silenced)
 
     active = spike[pack.edge_src]
+    if masked:
+        active = mx.logical_and(active, mx.logical_not(silenced[pack.edge_src]))
     vals = mx.where(active, pack.signed_counts, mx.array(0, dtype=mx.int32))
     want = mx.zeros((pack.n_neurons,), dtype=mx.int32).at[pack.destinations].add(vals)
     mx.eval(got, want)
@@ -99,8 +247,8 @@ def test_edge_split_does_not_change_results(pack):
     rng = np.random.default_rng(5)
     spike = mx.array(rng.random(pack.n_neurons) < 0.005)
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    base = np.asarray(engine_metal.propagate(spike, pack, n_src, 1))
+    base = np.asarray(engine_metal.propagate(spike, pack, n_src, 1, silenced=None))
     for split in (2, 4, 16):
         assert np.array_equal(
-            np.asarray(engine_metal.propagate(spike, pack, n_src, split)), base
+            np.asarray(engine_metal.propagate(spike, pack, n_src, split, silenced=None)), base
         )

@@ -27,7 +27,7 @@ from lif import core
 from lif.engine_naive import RunResult
 
 
-def make_step(pack: core.Pack, c: dict, targets: mx.array):
+def make_step(pack: core.Pack, signed_counts: mx.array, c: dict, targets: mx.array):
     """One tick. Identical arithmetic to engine_naive.tick, same order."""
 
     def step(v, g, rfc, counts, rfc_reload, delayed, stim_row):
@@ -45,7 +45,7 @@ def make_step(pack: core.Pack, c: dict, targets: mx.array):
 
         # --- 3/4. propagate the mask emitted DELAY_TICKS ago, then external drive.
         active = delayed[pack.edge_src]
-        vals = mx.where(active, pack.signed_counts, mx.array(0, dtype=mx.int32))
+        vals = mx.where(active, signed_counts, mx.array(0, dtype=mx.int32))
         contrib = mx.zeros((pack.n_neurons,), dtype=mx.int32).at[pack.destinations].add(vals)
         # See engine_naive.tick: "(unless refractory)" shields v and g from
         # synaptic writes too, so arrivals at a refractory neuron are dropped.
@@ -67,8 +67,8 @@ def make_step(pack: core.Pack, c: dict, targets: mx.array):
     return step
 
 
-def run(pack: core.Pack, stim: core.Stimulus, chunk: int = 256,
-        compile_body: bool = False, use_async: bool = True,
+def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
+        chunk: int = 256, compile_body: bool = False, use_async: bool = True,
         warmup: int = 50) -> RunResult:
     """Run the chunked lane.
 
@@ -81,9 +81,18 @@ def run(pack: core.Pack, stim: core.Stimulus, chunk: int = 256,
     It bought 4%; it is not worth an invalid result. Kept as an opt-in flag so
     the effect stays reproducible.
     """
+    # Edges of silenced sources carry a zero count, once per run; see
+    # engine_naive.run.
+    signed_counts = pack.signed_counts
+    mask = core.silenced_mask(pack, silenced)
+    if mask is not None:
+        signed_counts = mx.where(mask[pack.edge_src], mx.array(0, dtype=mx.int32),
+                                 pack.signed_counts)
+        mx.eval(signed_counts)
+
     c = {k: mx.array(v) for k, v in core.constants_f32().items()}
     targets = mx.array(stim.targets)
-    step = make_step(pack, c, targets)
+    step = make_step(pack, signed_counts, c, targets)
     if compile_body:
         step = mx.compile(step)
 

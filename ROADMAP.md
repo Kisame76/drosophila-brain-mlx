@@ -73,9 +73,11 @@ One standard experiment is 30 trials of 1 biological second:
 2. **A before-and-after comparison.** Run once normally, once with a chosen
    neuron silenced, and diff the two rate tables. This is the actual scientific
    question the model is built to answer ("what does this neuron do?"), and it
-   is why `silence` is in this phase rather than a later one. Cheap in this
-   engine's CSR: a mask over source neurons folded into a branch the propagation
-   kernel already has.
+   is why `silence` is in this phase rather than a later one. Implemented as a
+   mask over source neurons folded into a branch the propagation kernel already
+   has. Free when nothing is silenced; when something is, the fused lane
+   measured +36.5 % on the MaleCNS hub drive, for reasons not yet understood
+   (design doc, "Silencing").
 
 ### What it costs to build
 

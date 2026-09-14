@@ -186,13 +186,40 @@ dense drive. Wrong choice costs up to 4×. The engine cannot pick it at runtime
 without reading the spike count back to the host, which is exactly the
 synchronisation the design avoids.
 
+To silence neurons, pass a boolean mask over the pack's neuron indices:
+
+```python
+import numpy as np
+
+index = {int(n): i for i, n in enumerate(pack.neuron_ids)}
+silenced = np.zeros(pack.n_neurons, dtype=bool)
+silenced[index[720575940624963786]] = True
+result = engine_fused.run(pack, stim, silenced=silenced, chunk=32, edge_split=1)
+```
+
+Silencing sets every synapse *from* a neuron to zero weight, which is what
+`silence` in the published model's code does. That repository's README says
+"to and from"; its code produced the published results, and this follows the
+code. A silenced neuron still integrates, spikes and counts, and may also be
+driven.
+
+Without a mask the kernel is the one from before silencing existed. With one,
+the fused lane measured +0.09 % on FlyWire with the sugar drive, inside that
+session's noise, and **+36.5 %** on MaleCNS with the hub drive, with 10 silenced
+neurons that never fire, so the spike train was unchanged. The second number is
+not understood yet; see the design doc,
+[docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md).
+
 ## Correctness
 
 Speed claims are worthless without a correctness gate, so there are two.
 
 **Between lanes.** All four engines must produce identical per-neuron spike
 counts from the same stimulus and seed, compared by SHA-256 over the full
-127,400-element vector. They do, and final `v`/`g` match bitwise.
+127,400-element vector. They do, and final `v`/`g` match bitwise. The same holds
+with a silencing mask, which the kernel lanes implement as an early exit and the
+dense lanes as zeroed edge counts, so that gate compares two unrelated
+mechanisms.
 
 **Against Brian2.** `src/lif/validate_brian2.py` runs Brian2 2.10.1 and this
 engine on a connected 800-neuron subnetwork with a fixed spike train, so no RNG

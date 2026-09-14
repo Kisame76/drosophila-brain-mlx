@@ -41,9 +41,13 @@ class RunResult:
         return int(self.spike_counts.sum())
 
 
-def tick(state: dict, pack: core.Pack, c: dict, stim_row: mx.array,
-         targets: mx.array, slot: int) -> dict:
-    """One dt. Pure function of state -> state; no host readback, no branching."""
+def tick(state: dict, pack: core.Pack, signed_counts: mx.array, c: dict,
+         stim_row: mx.array, targets: mx.array, slot: int) -> dict:
+    """One dt. Pure function of state -> state; no host readback, no branching.
+
+    signed_counts is pack.signed_counts, with the edges of silenced sources
+    zeroed when run() was given a mask.
+    """
     v, g, rfc, ring = state["v"], state["g"], state["rfc"], state["ring"]
 
     # --- 1. refractory refresh, then the exact closed-form update.
@@ -72,7 +76,7 @@ def tick(state: dict, pack: core.Pack, c: dict, stim_row: mx.array,
     # available. Counts stay int32 until the very end -- integer adds are
     # order-independent, so the scatter is deterministic even if it uses atomics.
     active = delayed[pack.edge_src]
-    vals = mx.where(active, pack.signed_counts, mx.array(0, dtype=mx.int32))
+    vals = mx.where(active, signed_counts, mx.array(0, dtype=mx.int32))
     contrib = mx.zeros((pack.n_neurons,), dtype=mx.int32).at[pack.destinations].add(vals)
     # Both v and g are declared "(unless refractory)", and in Brian2 that shields
     # them from EVERY write while refractory, synaptic input included -- not just
@@ -102,7 +106,20 @@ def tick(state: dict, pack: core.Pack, c: dict, stim_row: mx.array,
     }
 
 
-def run(pack: core.Pack, stim: core.Stimulus, warmup: int = 50) -> RunResult:
+def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
+        warmup: int = 50) -> RunResult:
+    # Silencing as data: every edge of a silenced source carries a zero count,
+    # computed once per run. The kernel lanes implement the same semantics as an
+    # early exit instead; that the two mechanisms agree is what the silencing
+    # parity test checks. Without a mask the pack's counts are used directly, so
+    # an unsilenced run allocates nothing extra.
+    signed_counts = pack.signed_counts
+    mask = core.silenced_mask(pack, silenced)
+    if mask is not None:
+        signed_counts = mx.where(mask[pack.edge_src], mx.array(0, dtype=mx.int32),
+                                 pack.signed_counts)
+        mx.eval(signed_counts)
+
     c = {k: mx.array(v) for k, v in core.constants_f32().items()}
     state = core.initial_state(pack, stim)
     targets = mx.array(stim.targets)
@@ -111,7 +128,7 @@ def run(pack: core.Pack, stim: core.Stimulus, warmup: int = 50) -> RunResult:
     # Warm up so kernel compilation and first-touch allocation land outside the
     # measured window. State is rebuilt afterwards, so warmup cannot leak in.
     for t in range(min(warmup, n)):
-        state = tick(state, pack, c, stim.draws[t], targets, t % core.DELAY_TICKS)
+        state = tick(state, pack, signed_counts, c, stim.draws[t], targets, t % core.DELAY_TICKS)
         mx.eval(state["v"], state["g"], state["rfc"], state["ring"], state["counts"])
     state = core.initial_state(pack, stim)
     mx.eval(*state.values())
@@ -119,7 +136,7 @@ def run(pack: core.Pack, stim: core.Stimulus, warmup: int = 50) -> RunResult:
     mx.reset_peak_memory()
     start = time.perf_counter()
     for t in range(n):
-        state = tick(state, pack, c, stim.draws[t], targets, t % core.DELAY_TICKS)
+        state = tick(state, pack, signed_counts, c, stim.draws[t], targets, t % core.DELAY_TICKS)
         # The defining property of this lane: a full host synchronisation here,
         # every single tick.
         mx.eval(state["v"], state["g"], state["rfc"], state["ring"], state["counts"])
