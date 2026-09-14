@@ -3,6 +3,21 @@
 Where this repository is going, in what order, and what is deliberately not on
 it. Numbers here are measured unless marked otherwise.
 
+## Who this is for, in priority order
+
+The order below is the reason the phases are numbered the way they are.
+
+1. **Researchers running the published model.** People who want to activate a
+   set of neurons, silence another, and compare firing rates, but do not want to
+   wait 31 minutes per experiment. This is what phases 1 and 2 serve, and it is
+   the only group the repository can serve without new unverifiable code.
+2. **Anyone coupling a brain to a body.** flybody, FlyGym, flyBrain's MuJoCo
+   scene. Phase 4, and conditional: the interesting part is also the part this
+   repository would not own. It matters because it is the only way the work
+   becomes visible to someone who does not read spike-count tables.
+3. **MLX developers.** Served already by
+   [docs/mlx-notes.md](docs/mlx-notes.md), which needs no further phase.
+
 ## Where it stands
 
 The engine runs the published Shiu et al. model at 0.29 s per biological second
@@ -48,7 +63,23 @@ One standard experiment is 30 trials of 1 biological second:
 | Brian2 2.10.1, one core | 62.6 s | 31 min |
 | this engine, fused lane | 0.29 s | 9 s (end to end not yet measured) |
 
-Two engine additions are required, both parity-gated across all four lanes:
+### What you get out of it
+
+1. **A rate table.** One row per neuron: id, name, spikes per second averaged
+   over the 30 trials, and the standard deviation across them. Identical in
+   content to what upstream's `get_rate` produces, so published analyses can be
+   reproduced directly. This is the primary deliverable; everything else in this
+   phase exists to produce it.
+2. **A before-and-after comparison.** Run once normally, once with a chosen
+   neuron silenced, and diff the two rate tables. This is the actual scientific
+   question the model is built to answer ("what does this neuron do?"), and it
+   is why `silence` is in this phase rather than a later one. Cheap in this
+   engine's CSR: a mask over source neurons folded into a branch the propagation
+   kernel already has.
+
+### What it costs to build
+
+Two engine additions, both parity-gated across all four lanes:
 **spike-event recording** (which neuron fired in which tick) and **silencing**.
 Recording also lets the Brian2 validation compare spike *times*, not only
 counts, which makes the correctness gate stronger than it is today.
@@ -71,6 +102,15 @@ Ordered by how much each shows per unit of work.
    histogram. A plotting script (matplotlib, optional dependency) that shows,
    for example, sugar input at 0 ms and the proboscis motor neuron responding.
    Every point on that plot is a measured spike.
+
+   The finished plot belongs **in the README**, near the top. The repository
+   currently opens with a table of milliseconds, which persuades someone who
+   already knows what the model is and nobody else. One curve showing sugar
+   going in and a motor neuron firing 40 ms later is the same claim in a form a
+   reader can check at a glance, and unlike a rendered fly it is made entirely
+   of measured spikes with nothing engineered in between. Committed as a
+   checked-in PNG or SVG plus the script that regenerates it, so it can be
+   re-derived rather than trusted.
 2. **Whole-brain activity film.** Needs 3D neuron coordinates, which neither
    pack carries today; the MaleCNS annotation table has `somaLocation` and that
    is the first thing to check. Deferred until a coordinate source exists, and
@@ -85,6 +125,29 @@ gait generators, odour decoders, landing gates and the rest of the engineered
 layer between motor neurons and joints. flyBrain's README says plainly that
 those are "engineering interfaces, not recovered circuits", and the same would
 be true here. Starts only after phases 1 to 3, and only with a partner body.
+
+Why it is on the list at all despite that caveat: a rate table convinces a
+neuroscientist and nobody else. A fly that walks is the only output of this
+work that a person with no background can look at and understand. That is a
+legitimate goal, and keeping it explicitly separate from the measured claims is
+how it stays honest.
+
+## Decisions already taken
+
+Recorded so they are not re-argued, with what was rejected and why.
+
+- **Upstream-compatible `run_exp` over a cleaner native API.** A native
+  rate-first API (`Experiment(excite=..., silence=..., trials=30)`) would have
+  been tidier and is what was originally recommended. Rejected in favour of
+  matching upstream's signature and parquet schema, because a researcher's
+  existing notebook running unchanged is worth more than a nicer signature.
+- **No time-resolved output port for a body.** An earlier proposal was to give
+  the engine a per-tick readout of named motor populations. Dropped: checking
+  how upstream computes rates showed it is `len(spikes in trial) / t_run`, i.e.
+  counts only. The existing `spike_counts` already covers the primary use case,
+  and the port solved a problem this project does not have. Per-tick output
+  returns in phase 3 for plotting, and in phase 4 if a body ever arrives.
+- **Events, not a dense raster.** See "Not planned" below.
 
 ## Not planned
 

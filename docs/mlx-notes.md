@@ -10,7 +10,7 @@ The workload is a neural simulation, but nothing here depends on that. If you
 have a loop that steps a few large arrays many times and it is slower than you
 expect, the diagnostics apply.
 
-Headline: the same model went from 22.1 s to 0.29 s per simulated second. None
+Headline: the same model went from 22.0 s to 0.29 s per simulated second. None
 of that came from removing host synchronisation, which is where I started
 looking.
 
@@ -64,8 +64,17 @@ Measured, 127,400 float32 elements, 16 ops, 32 steps per `eval`:
 machine sustains. **The chain is bandwidth-bound and the bandwidth is spent on
 intermediates nobody reads.** The fused kernel keeps the value in a register.
 
-In the real engine this same change was 1.51 s → 0.29 s, a 5.2x that matches the
-microbenchmark closely enough to trust the explanation.
+In the real engine the same change was 0.75 s → 0.29 s, a 2.55x. The
+microbenchmark's 5.9x is the ceiling, not the engine's number: it fuses a pure
+16-op chain, while a real tick spends part of its time on propagation that
+fusion does not touch. Expect a fraction of the isolated figure, in proportion
+to how much of your step is actually the elementwise chain.
+
+A warning attached to that 2.6x. It was 5.2x in an earlier version of this
+document, because the unfused baseline was accidentally running at a bad tuning
+constant. Fixing the baseline halved the apparent win. If you are measuring a
+speedup against your own "before", make sure the before is tuned; otherwise you
+are measuring your own earlier mistake.
 
 I originally wrote this up as *dispatch overhead*, which was wrong. See §3.
 
@@ -121,7 +130,8 @@ exits.
 Densely with early exits is often fine. My propagation kernel dispatches all
 127,400 threads every step and 127,300 of them return on their second
 instruction. The *dispatch* stays dense and statically sized; only the memory
-traffic becomes sparse. That was enough to go from 19.4 s to 1.51 s.
+traffic becomes sparse. That was enough to go from 19.6 s to 0.75 s, by far the
+largest single step in the project.
 
 ## 5. `mx.compile` can break bit-reproducibility
 

@@ -216,8 +216,9 @@ def load_edges(
         post_parts.append(qi_safe[nonzero].astype(np.int32))
         cnt_parts.append((s[nonzero] * weight[nonzero]).astype(np.int64))
 
-    if not log.check("edges", "surviving edge set non-empty", bool(pre_parts), "no edge passed the filter"):
-        raise SystemExit("empty edge set")
+    if not log.check("edges", "surviving edge set non-empty", bool(pre_parts),
+                     f"{len(pre_parts)} non-empty batches survived the filter"):
+        raise SystemExit("empty edge set: no row had both endpoints selected and a signed source")
 
     pre = np.concatenate(pre_parts)
     post = np.concatenate(post_parts)

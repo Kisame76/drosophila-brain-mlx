@@ -26,10 +26,10 @@ from lif import core
 from lif.engine_naive import RunResult
 
 # EDGE_SPLIT threads cooperate on each source neuron's edge list, striding
-# through it. One thread per neuron (EDGE_SPLIT = 1) collapses on load
-# imbalance: out-degree runs from 0 to 9615 with a mean of 115, and the driven
-# neurons are precisely the biggest hubs, so a single thread would serialise
-# ~9600 atomics while 127,399 others idle.
+# through it. One thread per neuron (K = 1) collapses on load imbalance:
+# out-degree runs from 0 to 9615 with a mean of 115, and the driven neurons are
+# precisely the biggest hubs, so a single thread would serialise ~9600 atomics
+# while 127,399 others idle.
 #
 # Measured 2026-09-14, M4 Pro, ms per propagate() call, 200 reps after warmup:
 #
@@ -38,14 +38,23 @@ from lif.engine_naive import RunResult
 #       21    1547  0.1442  0.1245* 0.1379  0.1608  0.2114  0.3117  0.5106
 #      107  379545  0.8866  0.5755  0.4329  0.3612* 0.3640  0.3840  0.5619
 #
-# There is no single best value and picking badly costs up to 2.5x. The small
-# loads are dominated by the ~0.11 ms per-eval floor, which is why K barely
-# matters there; the 107-hub row is real work and needs the split to break up
-# hub serialisation. The engine cannot choose K at runtime without reading the
-# spike count back to the host, which is exactly the synchronisation the chunked
-# design exists to avoid. So it is a parameter.
-EDGE_SPLIT = 16          # good for dense drive (hub stimulus)
-EDGE_SPLIT_SPARSE = 2    # good for physiological drive (e.g. 21 sugar GRNs)
+# End-to-end over 2000 ticks, s per biological second, per kernel lane:
+#
+#   FlyWire + 21 sugar GRNs    metal  K=2 best (0.8627)   fused  K=1 best (0.3353)
+#   MaleCNS + 100 hubs         metal  K=8 best (2.0118)   fused  K=8 best (1.3519)
+#
+# Two things that cost real time before they were measured. K=16 was this
+# module's default and is optimal in none of the four cases; on the sugar drive
+# it made the sparse lane twice as slow as it needed to be. And the two kernel
+# lanes do not share an optimum on a sparse drive (1 vs 2), because the fused
+# kernel dispatches different non-propagation work alongside it, so a benchmark
+# that forces one value on both misreports one of them.
+#
+# There is still no runtime-choosable value: picking K from the live spike count
+# needs a host readback, which is exactly the synchronisation the chunked design
+# exists to avoid. So it stays a parameter, now with measured defaults.
+EDGE_SPLIT = 8           # dense drive (hub stimulus); best for both lanes
+EDGE_SPLIT_SPARSE = 2    # physiological drive, this lane (the fused lane wants 1)
 
 _SRC_TEMPLATE = """
     uint gid = thread_position_in_grid.x;
@@ -87,7 +96,7 @@ def propagate(spike, pack: core.Pack, n_src, split: int = EDGE_SPLIT):
     )[0]
 
 
-def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src):
+def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src, split: int = EDGE_SPLIT):
     def step(v, g, rfc, counts, rfc_reload, delayed, stim_row):
         rfc = mx.maximum(rfc - 1, 0)
         not_ref = rfc == 0
@@ -98,7 +107,7 @@ def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src):
 
         spike = mx.logical_and(not_ref, v > c["v_th"])
 
-        contrib = propagate(delayed, pack, n_src)
+        contrib = propagate(delayed, pack, n_src, split)
         g = g + mx.where(not_ref, contrib.astype(mx.float32) * c["w_syn"], 0.0)
         # Gate and scatter on the ~100 driven neurons only. Materialising a full
         # zeros(N) buffer and masking it cost 20% of the tick in the sparse lane
@@ -117,11 +126,12 @@ def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src):
 
 
 def run(pack: core.Pack, stim: core.Stimulus, chunk: int = 64,
-        use_async: bool = True, warmup: int = 50) -> RunResult:
+        use_async: bool = True, warmup: int = 50,
+        split: int = EDGE_SPLIT) -> RunResult:
     c = {k: mx.array(v) for k, v in core.constants_f32().items()}
     targets = mx.array(stim.targets)
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    step = make_step(pack, c, targets, n_src)
+    step = make_step(pack, c, targets, n_src, split)
     n = stim.n_ticks
     N = pack.n_neurons
 
