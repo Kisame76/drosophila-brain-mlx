@@ -203,11 +203,11 @@ Silencing sets every synapse *from* a neuron to zero weight, which is what
 code. A silenced neuron still integrates, spikes and counts, and may also be
 driven.
 
-Without a mask the kernel is the one from before silencing existed. With one,
-the fused lane measured +0.09 % on FlyWire with the sugar drive, inside that
-session's noise, and **+36.5 %** on MaleCNS with the hub drive, with 10 silenced
-neurons that never fire, so the spike train was unchanged. The second number is
-not understood yet; see the design doc,
+Measured with 10 silenced neurons that never fire, against the same run without
+a mask, the fused lane moved −1.16 % on FlyWire with the sugar drive and +0.01 %
+on MaleCNS with the hub drive. The mask empties those neurons' edge ranges for
+the run rather than being tested in the kernel's early exit, which cost +36 % on
+MaleCNS; details in
 [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md).
 
 ## Correctness
@@ -217,8 +217,8 @@ Speed claims are worthless without a correctness gate, so there are two.
 **Between lanes.** All four engines must produce identical per-neuron spike
 counts from the same stimulus and seed, compared by SHA-256 over the full
 127,400-element vector. They do, and final `v`/`g` match bitwise. The same holds
-with a silencing mask, which the kernel lanes implement as an early exit and the
-dense lanes as zeroed edge counts, so that gate compares two unrelated
+with a silencing mask, which the kernel lanes implement as empty edge ranges and
+the dense lanes as zeroed edge counts, so that gate compares two unrelated
 mechanisms.
 
 **Against Brian2.** `src/lif/validate_brian2.py` runs Brian2 2.10.1 and this
@@ -374,6 +374,12 @@ Recorded so nobody repeats them:
   atomic counter, then dispatching over `MAXS·K` threads instead of `N·K`, is the
   obvious next optimisation. It is slower: 0.0572 ms against 0.0550 ms for the
   single kernel. The second dispatch costs more than the smaller grid saves.
+- **Testing the silencing mask in the kernel's early exit.**
+  `if (!spike[i] || silenced[i]) return;` is one extra read, but all `N·K`
+  threads run it, including the ones that exit: +36 % of the fused tick on
+  MaleCNS at `edge_split` 8, +74.5 % at 16, nothing at 1. A nested `if` or a
+  ternary costs the same. Silencing now empties the neuron's edge range, which
+  only threads whose neuron spiked read.
 - **Trusting `StateMonitor` timestamps.** Brian2 records with `when='start'`,
   so monitor row `t` holds the state at the *end of tick t-1*. Read as same-tick
   state it fakes a one-tick lag, which cost me two "fixes" to the refractory and

@@ -111,7 +111,7 @@ def silencing_case(request, pack, stim):
 @pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
 def test_silencing_matches_naive(pack, silencing_case, lane):
     """Two implementations of one semantics must agree: a masked copy of the
-    edge counts (naive, chunked) and an early exit in the kernel (metal, fused)."""
+    edge counts (naive, chunked) and empty edge ranges in the kernel (metal, fused)."""
     case_stim, mask, _, ref = silencing_case
     got = run_lane(lane, pack, case_stim, silenced=mask)
 
@@ -209,16 +209,32 @@ def test_metal_kernel_is_deterministic(pack):
     rng = np.random.default_rng(7)
     spike = mx.array(rng.random(pack.n_neurons) < 0.01)
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    runs = [np.asarray(engine_metal.propagate(spike, pack, n_src, silenced=None))
+    row_end = engine_metal.silenced_row_end(pack, None)
+    runs = [np.asarray(engine_metal.propagate(spike, pack, n_src, row_end=row_end))
             for _ in range(5)]
     for other in runs[1:]:
         assert np.array_equal(runs[0], other)
 
 
+def test_silenced_row_end_empties_only_silenced_edge_ranges(pack):
+    """The kernel lanes silence a source by ending its edge range where it starts.
+    Every other range is untouched, and without a mask none is."""
+    import mlx.core as mx
+
+    from lif import engine_metal
+
+    rp = np.asarray(pack.row_ptr)
+    assert np.array_equal(np.asarray(engine_metal.silenced_row_end(pack, None)), rp[1:])
+
+    mask = np.random.default_rng(11).random(pack.n_neurons) < 0.5
+    got = np.asarray(engine_metal.silenced_row_end(pack, mx.array(mask)))
+    assert np.array_equal(got, np.where(mask, rp[:-1], rp[1:]))
+
+
 @pytest.mark.parametrize("masked", [False, True])
 def test_metal_kernel_matches_dense_formulation(pack, masked):
-    """The hand-written kernel must equal the pure-MLX scatter it replaces, in
-    both of its variants: without a silencing mask and with one."""
+    """The hand-written kernel must equal the pure-MLX scatter it replaces,
+    without a silencing mask and with one."""
     import mlx.core as mx
 
     from lif import engine_metal
@@ -227,7 +243,8 @@ def test_metal_kernel_matches_dense_formulation(pack, masked):
     spike = mx.array(rng.random(pack.n_neurons) < 0.002)
     silenced = mx.array(rng.random(pack.n_neurons) < 0.5) if masked else None
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    got = engine_metal.propagate(spike, pack, n_src, silenced=silenced)
+    got = engine_metal.propagate(spike, pack, n_src,
+                                 row_end=engine_metal.silenced_row_end(pack, silenced))
 
     active = spike[pack.edge_src]
     if masked:
@@ -247,8 +264,9 @@ def test_edge_split_does_not_change_results(pack):
     rng = np.random.default_rng(5)
     spike = mx.array(rng.random(pack.n_neurons) < 0.005)
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    base = np.asarray(engine_metal.propagate(spike, pack, n_src, 1, silenced=None))
+    row_end = engine_metal.silenced_row_end(pack, None)
+    base = np.asarray(engine_metal.propagate(spike, pack, n_src, 1, row_end=row_end))
     for split in (2, 4, 16):
         assert np.array_equal(
-            np.asarray(engine_metal.propagate(spike, pack, n_src, split, silenced=None)), base
+            np.asarray(engine_metal.propagate(spike, pack, n_src, split, row_end=row_end)), base
         )

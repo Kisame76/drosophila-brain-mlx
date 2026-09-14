@@ -137,16 +137,17 @@ check exists for them.
 ## Silencing
 
 `silenced: np.ndarray[bool, N]` or `None`, passed to `run()`. Anything else
-raises `ValueError` (`core.silenced_mask`): an index array in its place would be
-read out of bounds by the kernel, without an error.
+raises `ValueError` (`core.silenced_mask`). Without that check an index array in
+its place would be read out of bounds by the dense lanes, and a length-1 mask
+would broadcast to every neuron in the kernel lanes, neither with an error.
 
-- `engine_metal.py` / `engine_fused.py`: the propagation kernel gains a
-  `silenced` input and its early exit becomes
-  `if (!spike[i] || silenced[i]) return;`. The plan was to pass an all-false
-  array when `silenced is None` and to template the kernel into two variants
-  only if that cost more than 1 % of the fused lane. It did (below), so there
-  are two, and `silenced=None` runs the kernel from before silencing existed,
-  source-identical.
+- `engine_metal.py` / `engine_fused.py`: a silenced source gets an empty edge
+  range. `engine_metal.silenced_row_end` builds, once per run, where each
+  source's range ends: `row_ptr[i + 1]`, or `row_ptr[i]` for a silenced source.
+  The propagation kernel reads it after its early exit, in place of
+  `row_ptr[i + 1]`, so only threads whose source spiked touch it, and the spike
+  arrays stay unmasked for recording. Without a mask the array is a view of
+  `row_ptr`; one kernel serves both cases.
 - `engine_naive.py` / `engine_chunked.py`: `signed_counts_eff =
   mx.where(silenced[edge_src], 0, signed_counts)` once per run. A 59 MB copy on
   FlyWire; acceptable in the slow lanes, and a different implementation of the
@@ -154,31 +155,84 @@ read out of bounds by the kernel, without an error.
   they use the pack's counts directly, so an unsilenced run pays neither the
   copy nor its memory.
 
-Measured 2026-09-14, M4 Pro, `powermode 2`, fused lane, s per biological second,
-median of 7 runs interleaved in one process; every arm without an effective mask
-produced the same spike-count SHA-256:
-
-| | before silencing | one kernel, all-false mask | two variants, `None` | two variants, 10 silenced neurons that never fire |
-|---|---|---|---|---|
-| FlyWire, 21 sugar GRNs, K=1, 10,000 ticks | 0.2975 | 0.2987 (+0.39 %) | 0.2983 (+0.25 %) | 0.2985 (+0.09 % vs `None`) |
-| MaleCNS, 100 hubs, K=8, 2,000 ticks | 1.1642 | 1.5853 (+36.17 %) | 1.1638 (−0.03 %) | 1.5886 (+36.50 % vs `None`) |
-
-The FlyWire row is inside that session's noise (load average 3.2 to 4.1). An
-earlier run of the same comparison, at load average 2.1 to 2.5, measured the
-one-kernel version at +1.06 % there and +36.18 % on MaleCNS, so the decision
-does not rest on a single run.
-
-Open: a run that does silence pays the MaleCNS cost, and why is not understood.
-On MaleCNS a second `if` instead of `||` measured −0.32 %, and a uint8 mask the
-same as bool. The propagation kernel dispatched on its own (4 hubs spiking,
-nothing silenced, 1,000 calls) pays +10.8 % for reading the mask on FlyWire at
-K=8, nothing measurable on MaleCNS at K=8, and nothing at K=1 on either; passing
-the mask without reading it costs nothing. So the cost is the read, and it
-depends on something the isolated dispatch does not reproduce.
-
 Semantics, matching upstream code: a silenced neuron still integrates and still
 spikes (its spikes are recorded); it delivers nothing. Excitation and silencing
 may overlap.
+
+### Why not a mask test in the early exit
+
+The first implementation (87e9afc) did what this design originally proposed:
+`if (!spike[i] || silenced[i]) return;`. An all-false mask cost +36 % of the
+fused lane on MaleCNS, so `silenced=None` got a second kernel without the mask,
+and a run that did silence kept paying +36.50 % for reasons unknown at the time.
+What was measured on 2026-09-14 to find them (M4 Pro, `powermode 0`,
+measurement scripts not in the repository):
+
+**The cost grows with K and is absent at K=1, on both datasets.** Fused lane,
+10 silenced neurons that never fire, so the spike train is unchanged (spike-count
+SHA-256 asserted equal across arms); median of 7 runs interleaved in one
+process, against the kernel without a mask in the same process:
+
+| MaleCNS, 100 hubs, 2,000 ticks | K=1 | K=2 | K=4 | K=8 | K=16 |
+|---|---|---|---|---|---|
+| no mask, s / biological s | 2.9479 | 1.8436 | 1.3332 | 1.1676 | 1.5455 |
+| mask in the exit | +0.08 % | +1.48 % | +5.54 % | +36.11 % | +74.54 % |
+| mask as range end | −0.01 % | +0.62 % | +0.36 % | +0.31 % | +0.20 % |
+
+FlyWire at K=8: +65.83 % with the sugar drive, +29.32 % with the hub drive. At
+K=1 with the sugar drive −1.92 %, noise, which is why the first measurement,
+taken at K=1 only, saw nothing on FlyWire. Not specific to fusion or chunking:
+the sparse lane paid +21.66 % on MaleCNS at K=8, and the fused lane with one
+tick per eval +25.63 %.
+
+**It is the read in the exit, however it is written.** On MaleCNS at K=8 a
+nested second `if` (+36.10 %) and `hi = silenced[i] ? lo : row_ptr[i + 1]`
+(+35.93 %) cost what `||` did; the mask bound as a kernel input but never read
+cost −0.03 %.
+
+**The kernel alone reproduces it when nothing spikes.** Propagation dispatched
+on its own, 32 calls per eval, no source spiking, µs per call:
+
+| | K=1 | K=2 | K=4 | K=8 |
+|---|---|---|---|---|
+| FlyWire, no mask | 15.3 | 23.3 | 32.2 | 51.6 |
+| FlyWire, mask in the exit | +0.9 % | +41.3 % | +58.5 % | +72.6 % |
+| MaleCNS, no mask | 17.5 | 26.8 | 39.0 | 64.1 |
+| MaleCNS, mask in the exit | −1.0 % | +41.7 % | +57.5 % | +69.1 % |
+| MaleCNS, mask as range end | −1.4 % | −1.8 % | −2.1 % | −3.3 % |
+
+So the cost is paid by the threads that exit, nearly all 1.33 M of them at K=8
+on MaleCNS. The earlier isolated measurement missed it because the four highest
+out-degree neurons spiked in every call: on MaleCNS that dispatch took 127 µs
+without the mask, and the extra read did not show (−1.7 %). Replaying the spike
+arrays the fused lane actually produced gives +18.3 µs per call at K=8
+(+29.3 %), less than half of the +42.2 µs per tick measured end to end; that
+difference is not explained.
+
+Why a read at index `gid / K` costs this much and one at `gid` costs nothing was
+not established. The compiled GPU code was not inspected (`xcrun metal` needs
+the Metal toolchain, which is not installed here).
+
+### Measured
+
+Before (87e9afc) against after, one session, M4 Pro, `powermode 0`, load average
+3.2 to 6.4 from desktop applications, s per biological second, median of 7 runs
+interleaved in one process; within each drive every arm produced the same
+spike-count SHA-256:
+
+| | before, no mask | before, 10 silenced | after, no mask | after, 10 silenced |
+|---|---|---|---|---|
+| FlyWire, 21 sugar GRNs, fused K=1, 10,000 ticks | 0.3013 | 0.2973 (−1.33 %) | 0.2999 (−0.46 %) | 0.2964 (−1.16 %) |
+| FlyWire, 100 hubs, fused K=8, 2,000 ticks | 1.1182 | 1.4520 (+29.85 %) | 1.1222 (+0.36 %) | 1.1227 (+0.04 %) |
+| FlyWire, 100 hubs, sparse K=8, 2,000 ticks | 1.5956 | 1.9153 (+20.03 %) | 1.5973 (+0.11 %) | 1.6014 (+0.25 %) |
+| MaleCNS, 100 hubs, fused K=8, 2,000 ticks | 1.1666 | 1.5890 (+36.21 %) | 1.1701 (+0.30 %) | 1.1702 (+0.01 %) |
+| MaleCNS, 100 hubs, sparse K=8, 2,000 ticks | 1.7101 | 2.0795 (+21.60 %) | 1.7134 (+0.19 %) | 1.7120 (−0.08 %) |
+
+"Before, 10 silenced" and "after, no mask" are relative to "before, no mask";
+"after, 10 silenced" is relative to "after, no mask". The sparse lane with the
+sugar drive at K=2 could not be measured at that load: two runs, of 7 and 15
+repetitions, gave +4.06 % and −0.09 % for "after, no mask", with the runs of a
+single arm spread by up to 23 %.
 
 ## Stimulus with two rates
 
