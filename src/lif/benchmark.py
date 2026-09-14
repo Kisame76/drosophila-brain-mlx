@@ -42,6 +42,9 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path("bench/results.json"))
     ap.add_argument("--pack", type=Path, default=core.PACK_DIR,
                     help="pack directory; defaults to the FlyWire v630 pack")
+    ap.add_argument("--edge-split", type=int, default=None,
+                    help="threads per source neuron for both kernel lanes; "
+                         "default 2 for the sugar drive, 16 for the hub drive")
     ap.add_argument("--stimulus", choices=("auto", "sugar", "hubs"), default="auto",
                     help="auto uses the sugar GRNs on a FlyWire pack, top-out-degree "
                          "hubs on any other dataset")
@@ -72,18 +75,39 @@ def main() -> int:
         draws = np.asarray(stim.draws)
         drive = f"{len(targets)} top-out-degree hubs"
 
+    # edge_split is load-dependent and there is no runtime-choosable value (see
+    # engine_metal.py): a handful of driven neurons wants a small K, a hub drive
+    # wants a large one. Both kernel lanes must get the SAME K or the comparison
+    # between them is meaningless -- which is exactly what happened when this was
+    # hardcoded to 1 for the fused lane and left at the module default of 16 for
+    # the sparse one: on a hub stimulus the fused lane came out slower than the
+    # lane it replaces, purely from the mismatched constant.
+    # Per-lane, because they do not share an optimum: on a sparse drive the fused
+    # lane wants 1 and the sparse lane wants 2 (0.3353 vs 0.3786 for fused at K=2,
+    # a 13% error if forced to match). Both explicit, both measured; see the table
+    # in engine_metal.py. --edge-split overrides both, for comparing the lanes at
+    # one setting rather than each at its best.
+    if mode == "sugar":
+        split_metal, split_fused = engine_metal.EDGE_SPLIT_SPARSE, 1
+    else:
+        split_metal = split_fused = engine_metal.EDGE_SPLIT
+    if args.edge_split is not None:
+        split_metal = split_fused = args.edge_split
+
     print(f"{_chip()}  |  {pack.n_neurons} neurons, {pack.n_edges} edges")
     print(f"dataset {pack.manifest.get('dataset', 'unknown')}")
     print(f"{ticks} ticks = {ticks * core.DT / 1000:.1f} biological s, "
           f"{drive} @ {args.rate_hz:g} Hz, "
-          f"{int(draws.sum())} input spikes\n")
+          f"{int(draws.sum())} input spikes, "
+          f"edge_split {split_metal} (metal) / {split_fused} (fused)\n")
 
     lanes = [
         ("naive dense (eval/tick)", lambda: engine_naive.run(pack, stim, warmup=50)),
         ("chunked dense", lambda: engine_chunked.run(pack, stim, chunk=64, warmup=50)),
-        ("sparse metal kernel", lambda: engine_metal.run(pack, stim, chunk=32, warmup=50)),
+        ("sparse metal kernel", lambda: engine_metal.run(pack, stim, chunk=32, warmup=50,
+                                                          split=split_metal)),
         ("fused, 2 dispatches", lambda: engine_fused.run(pack, stim, chunk=32,
-                                                         warmup=50, edge_split=1)),
+                                                         warmup=50, edge_split=split_fused)),
     ]
 
     print(f"{'lane':<26}{'s/biol.s':>10}{'ms/tick':>10}{'peak MB':>9}  parity")

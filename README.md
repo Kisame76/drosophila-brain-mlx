@@ -34,16 +34,20 @@ M4 Pro, 24 GB. FlyWire v630, 127,400 neurons, 14,687,178 edges, 10,000 ticks
 (1 biological second at dt = 0.1 ms), 21 right sugar GRNs driven at 150 Hz.
 Pack loading and one-time shader compilation excluded.
 
-| Engine | s / biological s | Peak memory |
-|---|---|---|
-| **this, fused — 2 Metal dispatches** | **0.2947** (±0.0003, n=3) | 665 MB |
-| [flyBrain](https://github.com/mehrantsi/flyBrain) Rust/Metal | 0.3648 (n=5) | 94 MB |
-| this, sparse Metal kernel | 1.5163 | 275 MB |
-| flyBrain MLX + metal_kernel | 3.241 | — |
-| this, dense MLX (chunked) | 19.45 | 834 MB |
-| this, dense MLX (eval per tick) | 22.11 | 324 MB |
-| flyBrain MLX (dense scatter) | 40.62 | — |
-| **Brian2 2.10.1 (the published model)** | **62.6** | — |
+All rows marked *same session* were measured on 2026-09-14 within minutes of
+each other, including the flyBrain comparison. That matters more than it sounds;
+see "How much to trust these".
+
+| Engine | s / biological s | Peak memory | |
+|---|---|---|---|
+| **this, fused — 2 Metal dispatches** | **0.2933** (±0.0001, n=3) | 665 MB | same session |
+| [flyBrain](https://github.com/mehrantsi/flyBrain) Rust/Metal | 0.3769 (±0.0107, n=5) | 94 MB | same session |
+| this, sparse Metal kernel | 0.7491 (±0.0182, n=3) | 265 MB | same session |
+| this, dense MLX (chunked) | 19.55 (±0.518, n=3) | 834 MB | same session |
+| this, dense MLX (eval per tick) | 22.02 (±0.356, n=3) | 326 MB | same session |
+| flyBrain MLX + metal_kernel | 3.241 | — | earlier session |
+| flyBrain MLX (dense scatter) | 40.62 | — | earlier session |
+| **Brian2 2.10.1 (the published model)** | **62.6** | — | earlier session |
 
 Reproduce the rows for this repository with:
 
@@ -61,10 +65,70 @@ Read the comparisons carefully:
   It is a lower bound: the Brian2 figure was measured over 200 ticks with the
   network barely active, and Brian2 slows down as activity rises while these
   lanes do not.
-- **vs. flyBrain (~20 %)** is a narrow win over a small, young project, and it
+- **vs. flyBrain (~22 %)** is a narrow win over a small, young project, and it
   costs 7× the memory. Their engine also processes more spikes in this run
   because its refractory semantics differ (see below); at equal spike counts the
-  margin is closer to 16 %.
+  margin is smaller, and on a busy machine it disappears (below).
+
+### How much to trust these
+
+Two things were found on 2026-09-14 while re-measuring. Both are recorded
+because a benchmark nobody can falsify is not a benchmark.
+
+**The sparse Metal lane was mistuned, and the table overstated what fusion
+bought.** That lane ran at `EDGE_SPLIT = 16`, this module's old default, which
+an end-to-end sweep shows is optimal in none of the four dataset/stimulus
+combinations tested. At the correct `K = 2` it is 2.0× faster than previously
+published: 1.5163 → 0.7491. The fused lane was already at its optimum and did
+not move. But the fusion step was being credited against that bad baseline, so
+its gain drops from a published 5.2× to a measured **2.55×**. The fastest
+number in this repository is unchanged; the story of how it was reached is not.
+
+**Wall-clock here is partly host-bound, and flyBrain's is not.** The same
+measurement on a machine under CPU load (load average 2.8, an Electron app at
+~57 % of a core) moves the two engines very differently:
+
+| | idle-ish | under load | |
+|---|---|---|---|
+| this, fused | 0.2933 | 0.3341 | +13.9 % |
+| flyBrain Rust/Metal | 0.3769 | 0.3726 | −1.1 %, i.e. noise |
+
+The GPU work is identical in both cases; the spike-count SHA-256 never changes.
+The difference is that this engine rebuilds its MLX graph on the host every
+chunk, and that host work competes for CPU, while a native Rust loop does not.
+So the honest statement is not a flat "22 % faster than flyBrain" but **"22 %
+faster on a quiet machine, shrinking to roughly parity as the host gets
+busy."** If you benchmark this yourself and get a worse number than the table,
+check your CPU load before suspecting your build.
+
+## Datasets
+
+Two connectome packs are supported. They are different animals from different
+laboratories; **spike counts are not comparable across them**, and the Shiu et
+al. constants were fitted to FlyWire only.
+
+| | FlyWire v630 | MaleCNS v1.0 |
+|---|---|---|
+| specimen | female, brain only | male, brain **and** ventral nerve cord |
+| neurons | 127,400 | 166,700 |
+| edges | 14,687,178 | 24,469,412 |
+| leg / wing motor neurons | absent | 708 VNC + 107 brain |
+| licence | non-commercial | CC BY 4.0 |
+
+MaleCNS, 2,000 ticks, 100 top-out-degree hubs at 150 Hz, `K = 8` for both kernel
+lanes, all four parity-gated against the naive baseline:
+
+| Engine | s / biological s | Peak memory |
+|---|---|---|
+| **this, fused — 2 Metal dispatches** | **1.360** | 441 MB |
+| this, sparse Metal kernel | 2.044 | 412 MB |
+| this, dense MLX (chunked) | 37.13 | 1202 MB |
+| this, dense MLX (eval per tick) | 39.32 | 432 MB |
+
+The surviving edge count, 24,469,412, is the same figure flyBrain publishes for
+the same published materialization, reached through an independently written
+filter. That agreement is the strongest evidence available that the selection
+rules are right.
 
 ## Install
 
@@ -159,14 +223,15 @@ the result does not depend on thread completion order — deterministic, unlike
 float atomics.
 
 Two Metal dispatches per tick: one for propagation (atomics), one for everything
-else. Getting from 20 s to 0.29 s was three findings, in order of size:
+else. Getting from 22 s to 0.29 s was three findings, in order of size:
 
 1. **Dense is the problem, not synchronisation.** Every tick touched all 14.7 M
    edges regardless of how few neurons fired — dense runtime is flat across a
    5,000× range in activity. Pure MLX cannot avoid this: compacting the spike
    list has a data-dependent output size, which the lazy graph cannot express.
    `mx.fast.metal_kernel` is the only way out, and it works by letting each
-   thread exit early rather than by removing a sync.
+   thread exit early rather than by removing a sync. 19.6 s → 0.75 s, by far
+   the largest step.
 2. **Load imbalance.** Out-degree runs from 0 to 9,615 with a mean of 115, and
    the driven neurons are the biggest hubs. One thread per neuron serialises
    ~9,600 atomics while 127,399 idle.
@@ -174,9 +239,16 @@ else. Getting from 20 s to 0.29 s was three findings, in order of size:
    elementwise half: MLX writes every intermediate to memory, so a chain of ~16
    ops moves 15.6 MiB per tick through DRAM at 114 GiB/s while the values
    themselves fit in registers. Fusing the chain into one kernel moves 1.0 MiB
-   and brought 1.51 s → 0.29 s.
+   and brought 0.75 s → 0.29 s.
 
-   This was written up as *dispatch overhead* until it was measured properly.
+   That gain was published as 5.2× (1.51 s → 0.29 s) until 2026-09-14. The
+   1.51 s baseline was the sparse lane running at a mistuned `EDGE_SPLIT`;
+   against a correctly tuned baseline the fusion is worth **2.55×**, not 5.2×.
+   The isolated microbenchmark above still measures 5.9× because it fuses a pure
+   16-op chain, whereas the engine's elementwise half is a smaller share of a
+   tick that also does propagation.
+
+   This was also written up as *dispatch overhead* until it was measured properly.
    It is not: 16 kernel dispatches inside one `mx.eval` cost what one costs
    (0.1117 ms vs 0.1121 ms). The ~0.11 ms floor is per `eval`, not per dispatch.
    A standalone microbenchmark of the same 16 ops gives 0.1333 ms/tick chained
@@ -216,8 +288,8 @@ reading it, and it is only fair to say so plainly:
   per-tick host synchronisation is what prompted this project in the first place.
 - **Kernel fusion came straight from its README**, which describes fusing
   decay/threshold work with CSR propagation to remove a full-neuron dispatch per
-  tick. Applying that idea took this engine from 1.51 s to 0.29 s — the single
-  largest step here, and not my idea.
+  tick. Applying that idea took this engine from 0.75 s to 0.29 s, a 2.55×
+  that is the second-largest step here, and not my idea.
 - Its benchmark setup (sugar-GRN stimulus, chunked steps, excluding pack load and
   shader compilation) is what made a fair comparison possible at all.
 

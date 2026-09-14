@@ -114,11 +114,16 @@ def read_flywire(args, r, neuron_ids):
 def read_malecns(args, r, neuron_ids):
     """Re-derive selection, signs and edges from the published Feather tables.
 
-    Mapping is a Python dict keyed on body ID, not a sorted searchsorted, and
-    the tables are read column-wise rather than batch-wise. Both differ from the
-    compiler on purpose.
+    Mapping is a Python dict keyed on body ID, not the sorted searchsorted the
+    compiler uses -- that is the independence that matters here, since it is the
+    step that decides which rows survive.
+
+    The connectivity table is streamed batch by batch like the compiler's, not
+    because that is independent but because it has 151,856,684 rows: reading it
+    whole and calling .tolist() on the id columns costs several GB and buys
+    nothing.
     """
-    from pyarrow import feather
+    from pyarrow import feather, ipc
 
     n = neuron_ids.size
 
@@ -146,24 +151,39 @@ def read_malecns(args, r, neuron_ids):
       f"excitatory {int((sign > 0).sum())}, inhibitory {int((sign < 0).sum())}, "
       f"unsigned {int((sign == 0).sum())} of {n}")
 
-    reader = feather.read_table(args.connectivity, columns=["body_pre", "body_post", "weight"])
-    b_pre = reader["body_pre"].to_numpy(zero_copy_only=False).astype(np.int64)
-    b_post = reader["body_post"].to_numpy(zero_copy_only=False).astype(np.int64)
-    weight = reader["weight"].to_numpy(zero_copy_only=False).astype(np.int64)
-    r("raw", "feather rows", b_pre.size == reader.num_rows, f"{reader.num_rows} rows")
+    reader = ipc.open_file(args.connectivity)
+    fi_pre = reader.schema.get_field_index("body_pre")
+    fi_post = reader.schema.get_field_index("body_post")
+    fi_w = reader.schema.get_field_index("weight")
 
     get = idx.get
-    pre_i = np.fromiter((get(b, -1) for b in b_pre.tolist()), dtype=np.int64, count=b_pre.size)
-    post_i = np.fromiter((get(b, -1) for b in b_post.tolist()), dtype=np.int64, count=b_post.size)
-    keep = (pre_i >= 0) & (post_i >= 0) & (weight > 0)
-    keep &= np.where(pre_i >= 0, sign[np.maximum(pre_i, 0)], 0) != 0
-    r("raw", "edges surviving the published filter", bool(keep.any()),
-      f"{int(keep.sum())} of {b_pre.size} rows: both endpoints selected, "
-      f"presynaptic transmitter signed, weight > 0")
+    pre_parts, post_parts, w_parts = [], [], []
+    n_rows = 0
+    for b in range(reader.num_record_batches):
+        batch = reader.get_batch(b)
+        bp = batch.column(fi_pre).to_pylist()
+        bq = batch.column(fi_post).to_pylist()
+        wt = np.asarray(batch.column(fi_w).to_numpy(zero_copy_only=False), dtype=np.int64)
+        n_rows += len(bp)
 
-    pre_i = pre_i[keep]
-    post_i = post_i[keep]
-    w = sign[pre_i] * weight[keep]
+        pi = np.fromiter((get(x, -1) for x in bp), dtype=np.int64, count=len(bp))
+        qi = np.fromiter((get(x, -1) for x in bq), dtype=np.int64, count=len(bq))
+        keep = (pi >= 0) & (qi >= 0) & (wt > 0)
+        keep &= np.where(pi >= 0, sign[np.maximum(pi, 0)], 0) != 0
+        if not keep.any():
+            continue
+        pre_parts.append(pi[keep].astype(np.int32))
+        post_parts.append(qi[keep].astype(np.int32))
+        w_parts.append(sign[pi[keep]] * wt[keep])
+
+    r("raw", "feather rows read", n_rows > 0,
+      f"{n_rows} rows in {reader.num_record_batches} record batches")
+    pre_i = np.concatenate(pre_parts).astype(np.int64)
+    post_i = np.concatenate(post_parts).astype(np.int64)
+    w = np.concatenate(w_parts)
+    r("raw", "edges surviving the published filter", pre_i.size > 0,
+      f"{pre_i.size} of {n_rows} rows: both endpoints selected, "
+      f"presynaptic transmitter signed, weight > 0")
     return pre_i, post_i, w
 
 

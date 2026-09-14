@@ -10,47 +10,47 @@
   "spike_counts_sha256": "b2d40ab89e0642cda23f311157dcccb7bc9043494110747441b5404439e25dec",
   "lanes": {
     "naive dense (eval/tick)": {
-      "seconds_per_biological_second": 22.10887116700178,
-      "ms_per_tick": 2.210887116700178,
-      "peak_bytes": 323617099,
+      "seconds_per_biological_second": 22.019342750001673,
+      "ms_per_tick": 2.201934275000167,
+      "peak_bytes": 325976500,
       "parity": "baseline",
       "runs": [
-        22.164023417000863,
-        22.119386416998168,
-        22.10887116700178
+        22.613976000000548,
+        22.730562166998425,
+        22.01934275000167
       ]
     },
     "chunked dense": {
-      "seconds_per_biological_second": 19.4497152920012,
-      "ms_per_tick": 1.9449715292001202,
+      "seconds_per_biological_second": 19.546173416001693,
+      "ms_per_tick": 1.9546173416001693,
       "peak_bytes": 833670651,
       "parity": "PASS",
       "runs": [
-        19.519213083000068,
-        19.557887082999514,
-        19.4497152920012
+        19.59664916699694,
+        20.58267437500035,
+        19.546173416001693
       ]
     },
     "sparse metal kernel": {
-      "seconds_per_biological_second": 1.5162861249991693,
-      "ms_per_tick": 0.1516286124999169,
-      "peak_bytes": 274517130,
+      "seconds_per_biological_second": 0.7491260839997267,
+      "ms_per_tick": 0.07491260839997267,
+      "peak_bytes": 264686518,
       "parity": "PASS",
       "runs": [
-        1.5162861249991693,
-        1.518012832999375,
-        1.51697270799923
+        0.7491260839997267,
+        0.7568791249977949,
+        0.7855204999978014
       ]
     },
     "fused, 2 dispatches": {
-      "seconds_per_biological_second": 0.29469416700158035,
-      "ms_per_tick": 0.029469416700158034,
+      "seconds_per_biological_second": 0.2933004160004202,
+      "ms_per_tick": 0.029330041600042024,
       "peak_bytes": 665457684,
       "parity": "PASS",
       "runs": [
-        0.29522158299732837,
-        0.2947414160007611,
-        0.29469416700158035
+        0.2933004160004202,
+        0.2934797920024721,
+        0.29336562499884167
       ]
     }
   }
