@@ -252,6 +252,17 @@ than a missing feature.
 Note how flat the small-load rows are: at 2 and 21 active rows the cost barely
 differs from K=1 to K=8, because the whole thing is floor (§3), not work.
 
+**Keep the exit to the one read that decides it.** Whatever is tested before
+`return` is paid by all `N * K` threads, including the ones that exit. A second
+per-row flag in the exit, `if (!active[i] || masked[i]) return;`, measured with
+no row active and the kernel dispatched on its own (127,400 rows): +0.9 % at
+K=1, +41 % at K=2, +59 % at K=4, +73 % at K=8, against the same kernel without
+the flag. In the engine at K=8 that was +29 % or +66 % of the whole step,
+depending on the stimulus. A nested `if` or a ternary on the row's end cost the
+same. Moving the flag into data read only after the exit, an end-of-row array in
+which a masked row ends where it starts, cost at most +2.5 % in the same runs,
+about what binding the flag without reading it cost (+2.0 %).
+
 ## 9. What did not work
 
 - **Compacting the active list into a dense array with an atomic counter, then

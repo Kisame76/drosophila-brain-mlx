@@ -198,8 +198,9 @@ def silenced_mask(pack: Pack, silenced: np.ndarray | None) -> mx.array | None:
     still integrates, still spikes and still counts; it delivers nothing. It may
     also be a stimulus target.
 
-    Strict on purpose: an index array passed where the mask belongs would be
-    read out of bounds by the kernel lanes, without any error.
+    Strict on purpose. Without this check an index array in place of the mask
+    would be read out of bounds by the dense lanes, without any error, and a
+    mask of length 1 would broadcast to every neuron in the kernel lanes.
     """
     if silenced is None:
         return None
