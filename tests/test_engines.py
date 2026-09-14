@@ -178,7 +178,7 @@ def test_silenced_source_still_fires_but_delivers_nothing(pack, relay, lane):
 def test_silenced_neuron_still_receives_input(pack, relay, lane):
     """Silencing is outgoing only, as upstream's model.py does it; its README
     says "to and from". A silenced T still integrates S's input and fires."""
-    s, t, relay_stim, _ = relay
+    _, t, relay_stim, _ = relay
     base = run_lane(lane, pack, relay_stim)
 
     mask = np.zeros(pack.n_neurons, dtype=bool)
