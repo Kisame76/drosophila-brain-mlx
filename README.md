@@ -173,18 +173,44 @@ python -m lif.benchmark     # the table above
 from lif import core, engine_fused
 
 pack = core.load_pack()
+# the hub drive: the 100 highest out-degree neurons at 150 Hz
 stim = core.make_stimulus(pack, n_ticks=10_000, seed=20260913)
-result = engine_fused.run(pack, stim, chunk=32, edge_split=1)
+result = engine_fused.run(pack, stim, chunk=32, edge_split=8)
 
 print(result.total_spikes(), result.counts_sha256())
 ```
 
 `edge_split` is the one knob that matters. It sets how many GPU threads share one
-neuron's edge list, and the best value depends on how much of the network is
-firing: **1** for physiological drive (a handful of spikes per tick), **16** for
-dense drive. Wrong choice costs up to 4×. The engine cannot pick it at runtime
-without reading the spike count back to the host, which is exactly the
-synchronisation the design avoids.
+neuron's edge list. There are that many threads for every neuron in every tick,
+and nearly all of them exit at once because their neuron did not fire, so a
+larger value helps when the neurons that do fire carry long edge lists and costs
+when they do not. The best value follows the drive, and on a sparse drive also
+the lane:
+
+- **Sparse drive**, such as the 21 sugar GRNs (FlyWire: 1.36 spikes per tick in
+  the whole network, with 209 outgoing edges): **1** for the fused lane, **2**
+  for the sparse Metal lane, where 1 measured within 0.1 %.
+- **Hub drive**, which is what `make_stimulus` produces (FlyWire: 3.93 spikes
+  and 6,534 outgoing edges per tick; MaleCNS: 3.69 and 7,346): **8** for both
+  lanes, the default.
+
+Measured end to end on 2026-09-14, M4 Pro, one process per pack with the runs
+interleaved, median of 7, load average 2.47 to 3.05. Bold is the fastest value
+in s per biological second, every other cell the time relative to it:
+
+| pack, drive, ticks | lane | K=1 | K=2 | K=4 | K=8 | K=16 |
+|---|---|---|---|---|---|---|
+| FlyWire, 21 sugar GRNs, 10,000 | fused | **0.301** | 1.16× | 1.52× | 2.29× | 3.80× |
+| | sparse Metal | 1.00× | **0.746** | 1.12× | 1.42× | 2.06× |
+| FlyWire, 100 hubs, 2,000 | fused | 2.23× | 1.42× | 1.07× | **1.140** | 1.21× |
+| | sparse Metal | 1.89× | 1.31× | 1.06× | **1.623** | 1.14× |
+| MaleCNS, 100 hubs, 2,000 | fused | 2.52× | 1.58× | 1.14× | **1.168** | 1.32× |
+| | sparse Metal | 2.09× | 1.45× | 1.12× | **1.710** | 1.18× |
+
+The other drive's value costs 2.23× to 2.52× in the fused lane and 1.31× to
+1.45× in the sparse Metal lane; 16 is fastest in no row. The engine cannot pick
+the value at runtime without reading the spike count back to the host, which is
+exactly the synchronisation the design avoids.
 
 To silence neurons, pass a boolean mask over the pack's neuron indices:
 
@@ -194,7 +220,7 @@ import numpy as np
 index = {int(n): i for i, n in enumerate(pack.neuron_ids)}
 silenced = np.zeros(pack.n_neurons, dtype=bool)
 silenced[index[720575940624963786]] = True
-result = engine_fused.run(pack, stim, silenced=silenced, chunk=32, edge_split=1)
+result = engine_fused.run(pack, stim, silenced=silenced, chunk=32, edge_split=8)
 ```
 
 Silencing sets every synapse *from* a neuron to zero weight, which is what
