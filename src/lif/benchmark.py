@@ -44,7 +44,8 @@ def main() -> int:
                     help="pack directory; defaults to the FlyWire v630 pack")
     ap.add_argument("--edge-split", type=int, default=None,
                     help="threads per source neuron for both kernel lanes; "
-                         "default 2 for the sugar drive, 16 for the hub drive")
+                         "default 2 (metal) and 1 (fused) for the sugar drive, 8 for the "
+                         "hub drive")
     ap.add_argument("--stimulus", choices=("auto", "sugar", "hubs"), default="auto",
                     help="auto uses the sugar GRNs on a FlyWire pack, top-out-degree "
                          "hubs on any other dataset")
