@@ -6,6 +6,12 @@
 
 Every lane is checked against the naive baseline before its timing is reported;
 a lane that fails parity is reported as FAIL and its time is meaningless.
+
+The results file (--out) describes the run: device, dataset, ticks, stimulus,
+rate, seed and the spike-count SHA-256. Per lane it holds the fastest of the
+--repeat runs as seconds_per_biological_second and ms_per_tick, the wall-clock
+seconds of every run as run_seconds, the last run's peak_bytes, parity, and
+edge_split, which is null for the dense lanes.
 """
 
 from __future__ import annotations
@@ -25,8 +31,9 @@ from lif import core, stimulus_flybrain
 def _chip() -> str:
     try:
         return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
-                              capture_output=True, text=True, timeout=5).stdout.strip()
-    except Exception:
+                              capture_output=True, text=True, timeout=5,
+                              check=False).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
         return platform.machine()
 
 
@@ -140,7 +147,7 @@ def main() -> int:
             "peak_bytes": r.peak_bytes,
             "parity": parity,
             "edge_split": split,
-            "runs": times,
+            "run_seconds": times,
         }
 
     print(f"\nspikes {ref.total_spikes()}, {int((ref.spike_counts > 0).sum())} neurons fired")

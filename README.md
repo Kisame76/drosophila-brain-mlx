@@ -31,7 +31,8 @@ traced. The engine integrates membrane voltage through that fixed wiring.
 ## Results
 
 M4 Pro, 24 GB. FlyWire v630, 127,400 neurons, 14,687,178 edges, 10,000 ticks
-(1 biological second at dt = 0.1 ms), 21 right sugar GRNs driven at 150 Hz.
+(1 biological second at dt = 0.1 ms), 21 right sugar GRNs driven at 150 Hz,
+`edge_split` 1 for the fused lane and 2 for the sparse Metal lane (see [Use](#use)).
 Pack loading and one-time shader compilation excluded.
 
 All rows marked *same session* were measured on 2026-09-14 within minutes of

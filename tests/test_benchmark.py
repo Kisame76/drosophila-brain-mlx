@@ -57,6 +57,16 @@ def test_results_file_records_the_edge_split_of_each_kernel_lane(args, metal, fu
     }
 
 
+def test_results_file_keeps_the_wall_clock_seconds_of_every_run(tmp_path, monkeypatch):
+    """The per-run times are raw seconds; the headline figure is the best of them."""
+    results = run_benchmark(tmp_path, monkeypatch, "--ticks", "10", "--repeat", "2")
+    for lane in results["lanes"].values():
+        assert "runs" not in lane
+        assert len(lane["run_seconds"]) == 2
+        assert lane["seconds_per_biological_second"] == (
+            min(lane["run_seconds"]) / results["ticks"] * 10_000)
+
+
 def test_quick_and_ticks_cannot_be_combined(tmp_path, monkeypatch):
     """--quick used to override --ticks without a word."""
     with pytest.raises(SystemExit) as excinfo:
