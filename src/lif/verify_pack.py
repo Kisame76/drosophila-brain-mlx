@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Independent verification of a compiled CSR pack against its raw source files.
 
 Deliberately does NOT reuse the compilers' build path: rows are reconstructed

@@ -1,7 +1,7 @@
 [project]
 name = "mlx-lif-engine"
 version = "0.1.0"
-description = "MLX-native leaky integrate-and-fire engine for the FlyWire Drosophila connectome"
+description = "MLX-native leaky integrate-and-fire engine for the Drosophila connectome (FlyWire v630, MaleCNS v1.0)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

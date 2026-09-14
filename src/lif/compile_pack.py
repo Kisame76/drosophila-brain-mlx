@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """CSR-Compiler: FlyWire connectome CSV/Parquet -> source-major CSR pack.
 
 Emits neuron_ids / row_ptr / destinations / signed_counts plus a manifest.json

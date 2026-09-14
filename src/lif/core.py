@@ -44,8 +44,8 @@ W_EXT = W_SYN * F_POI  # 68.75 mV, applied directly to v
 # state update, so monitor row t holds the state at the END of tick t-1. Reading
 # it as same-tick state fakes a one-tick lag in both the delay and the
 # refractory release. Compare monitor row t+1 against engine tick t.
-RFC_TICKS = int(round(T_RFC / DT))          # 22
-DELAY_TICKS = int(round(T_DLY / DT))        # 18
+RFC_TICKS = round(T_RFC / DT)               # 22
+DELAY_TICKS = round(T_DLY / DT)             # 18
 
 # Exact closed-form update over one dt for
 #     dv/dt = (V_0 - v + g) / T_MBR

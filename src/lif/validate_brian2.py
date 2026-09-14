@@ -14,13 +14,21 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, "src")
-from lif import core, subnet  # noqa: E402
+from lif import core, subnet
 
 
 def run_brian2(sub, draws, n_ticks, dt_ms=core.DT):
-    from brian2 import (Network, NeuronGroup, SpikeGeneratorGroup, SpikeMonitor,
-                        Synapses, defaultclock, mV, ms, prefs)
+    from brian2 import (
+        Network,
+        NeuronGroup,
+        SpikeGeneratorGroup,
+        SpikeMonitor,
+        Synapses,
+        defaultclock,
+        ms,
+        mV,
+        prefs,
+    )
     prefs.codegen.target = "numpy"
     defaultclock.dt = dt_ms * ms
 
@@ -67,13 +75,13 @@ def run_brian2(sub, draws, n_ticks, dt_ms=core.DT):
 
 def run_mlx(sub, draws, n_ticks, lane="naive"):
     import mlx.core as mx
-    from lif import engine_chunked, engine_naive
+
+    from lif import engine_chunked, engine_metal, engine_naive
 
     pack = subnet.as_pack(sub)
     stim = core.Stimulus(targets=sub.seeds.astype(np.int32),
                          draws=mx.array(draws[:n_ticks]),
                          n_ticks=n_ticks, rate_hz=float("nan"), seed=-1)
-    from lif import engine_metal
     mod = {"naive": engine_naive, "chunked": engine_chunked, "metal": engine_metal}[lane]
     r = mod.run(pack, stim, warmup=0)
     return r.spike_counts.astype(np.int64), r.v_final, r.g_final
