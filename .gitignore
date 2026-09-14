@@ -40,12 +40,5 @@ outputs/
 .Spotlight-V100
 .Trashes
 
-# graphify — keep the three shareable outputs, drop the working files
 graphify-out/*
-!graphify-out/graph.html
-!graphify-out/GRAPH_REPORT.md
-!graphify-out/graph.json
-
-# Claude Code: settings.json is shared project config and stays tracked;
-# only the personal overrides are ignored.
-.claude/settings.local.json
+.claude/*
