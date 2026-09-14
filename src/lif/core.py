@@ -187,6 +187,31 @@ def make_stimulus(
     )
 
 
+# ---------------------------------------------------------------- silencing
+def silenced_mask(pack: Pack, silenced: np.ndarray | None) -> mx.array | None:
+    """Validate a per-run silencing mask and put it on the device; None stays None.
+
+    Silencing neuron i sets every synapse FROM i to zero weight, which is what
+    data/ref/model.py's `silence` does (`syn.w['<i> == i'] = 0*mV`). The upstream
+    README says synapses "to and from" the neuron; the code, which produced the
+    published results, says from, and this follows the code. A silenced neuron
+    still integrates, still spikes and still counts; it delivers nothing. It may
+    also be a stimulus target.
+
+    Strict on purpose: an index array passed where the mask belongs would be
+    read out of bounds by the kernel lanes, without any error.
+    """
+    if silenced is None:
+        return None
+    if (not isinstance(silenced, np.ndarray) or silenced.dtype != np.bool_
+            or silenced.shape != (pack.n_neurons,)):
+        raise ValueError(
+            f"silenced must be a numpy bool array of shape ({pack.n_neurons},), got "
+            f"{type(silenced).__name__} dtype={getattr(silenced, 'dtype', None)} "
+            f"shape={getattr(silenced, 'shape', None)}")
+    return mx.array(silenced)
+
+
 # ---------------------------------------------------------------- state
 def initial_state(pack: Pack, stim: Stimulus) -> dict:
     """Initial v, g, refractory counters and delay ring.

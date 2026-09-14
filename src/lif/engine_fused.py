@@ -93,9 +93,12 @@ _state_kernel = mx.fast.metal_kernel(
 )
 
 
-def run(pack: core.Pack, stim: core.Stimulus, chunk: int = 32,
-        use_async: bool = True, warmup: int = 50,
+def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
+        chunk: int = 32, use_async: bool = True, warmup: int = 50,
         edge_split: int = EDGE_SPLIT) -> RunResult:
+    # Read by the propagation kernel only, so a silenced neuron still spikes and
+    # counts here. None selects the kernel variant without a mask.
+    mask = core.silenced_mask(pack, silenced)
     cf = core.constants_f32()
     k = {f"c_{name}": mx.array([float(cf[name])], dtype=mx.float32)
          for name in ("v0_term", "couple_g", "decay_v", "decay_g", "v_th",
@@ -122,7 +125,7 @@ def run(pack: core.Pack, stim: core.Stimulus, chunk: int = 32,
         rl = st["rfc_reload"]
         for t in range(t0, t0 + kk):
             s = t % core.DELAY_TICKS
-            contrib = propagate(ring[s], pack, n_src, edge_split)
+            contrib = propagate(ring[s], pack, n_src, edge_split, silenced=mask)
             v, g, rfc, counts, spike = _state_kernel(
                 inputs=[v, g, rfc, counts, contrib, draws_u8[t], target_slot,
                         rl, n_neurons, k["c_v0_term"], k["c_couple_g"],

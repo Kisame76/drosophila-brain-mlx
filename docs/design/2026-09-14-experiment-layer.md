@@ -136,18 +136,45 @@ check exists for them.
 
 ## Silencing
 
-`silenced: np.ndarray[bool, N]` or `None`, passed to `run()`.
+`silenced: np.ndarray[bool, N]` or `None`, passed to `run()`. Anything else
+raises `ValueError` (`core.silenced_mask`): an index array in its place would be
+read out of bounds by the kernel, without an error.
 
 - `engine_metal.py` / `engine_fused.py`: the propagation kernel gains a
   `silenced` input and its early exit becomes
-  `if (!spike[i] || silenced[i]) return;`. When `silenced is None`, an
-  all-false array is passed. One extra byte read per source thread; measured,
-  and if it costs more than 1 % of the fused lane, the kernel is templated
-  into two variants.
+  `if (!spike[i] || silenced[i]) return;`. The plan was to pass an all-false
+  array when `silenced is None` and to template the kernel into two variants
+  only if that cost more than 1 % of the fused lane. It did (below), so there
+  are two, and `silenced=None` runs the kernel from before silencing existed,
+  source-identical.
 - `engine_naive.py` / `engine_chunked.py`: `signed_counts_eff =
-  mx.where(silenced[edge_src], 0, signed_counts)` once per run. A 59 MB copy;
-  acceptable in the slow lanes, and a different implementation of the same
-  semantics, which is what the parity test wants.
+  mx.where(silenced[edge_src], 0, signed_counts)` once per run. A 59 MB copy on
+  FlyWire; acceptable in the slow lanes, and a different implementation of the
+  same semantics, which is what the parity test wants. With `silenced is None`
+  they use the pack's counts directly, so an unsilenced run pays neither the
+  copy nor its memory.
+
+Measured 2026-09-14, M4 Pro, `powermode 2`, fused lane, s per biological second,
+median of 7 runs interleaved in one process; every arm without an effective mask
+produced the same spike-count SHA-256:
+
+| | before silencing | one kernel, all-false mask | two variants, `None` | two variants, 10 silenced neurons that never fire |
+|---|---|---|---|---|
+| FlyWire, 21 sugar GRNs, K=1, 10,000 ticks | 0.2975 | 0.2987 (+0.39 %) | 0.2983 (+0.25 %) | 0.2985 (+0.09 % vs `None`) |
+| MaleCNS, 100 hubs, K=8, 2,000 ticks | 1.1642 | 1.5853 (+36.17 %) | 1.1638 (−0.03 %) | 1.5886 (+36.50 % vs `None`) |
+
+The FlyWire row is inside that session's noise (load average 3.2 to 4.1). An
+earlier run of the same comparison, at load average 2.1 to 2.5, measured the
+one-kernel version at +1.06 % there and +36.18 % on MaleCNS, so the decision
+does not rest on a single run.
+
+Open: a run that does silence pays the MaleCNS cost, and why is not understood.
+On MaleCNS a second `if` instead of `||` measured −0.32 %, and a uint8 mask the
+same as bool. The propagation kernel dispatched on its own (4 hubs spiking,
+nothing silenced, 1,000 calls) pays +10.8 % for reading the mask on FlyWire at
+K=8, nothing measurable on MaleCNS at K=8, and nothing at K=1 on either; passing
+the mask without reading it costs nothing. So the cost is the read, and it
+depends on something the isolated dispatch does not reproduce.
 
 Semantics, matching upstream code: a silenced neuron still integrates and still
 spikes (its spikes are recorded); it delivers nothing. Excitation and silencing
@@ -236,12 +263,23 @@ the full pack.
    events, and the same `spike_counts` SHA-256 as `record=False`.
 4. **Overflow.** `cap=8` on a run with more than 8 spikes in a chunk raises
    `RecordOverflow` and the exception names the tick range.
-5. **Silencing parity across lanes.** Silence the 10 highest out-degree neurons
-   under the sugar stimulus; all four lanes agree; the total differs from the
-   unsilenced run.
-6. **Silencing semantics.** On the subnetwork, silence a single source with
-   exactly one downstream target that has no other input; that target records
-   zero spikes, the silenced source still records its own.
+5. **Silencing parity across lanes.** All four lanes agree, and the total
+   differs from the unsilenced run. As first written here (the 10 highest
+   out-degree neurons under the sugar stimulus) the test was vacuous: those
+   neurons fire 0 spikes under that drive, measured at 400 and at 10,000
+   ticks, so silencing them changes nothing. Implemented as two cases instead:
+   the 10 highest out-degree neurons among those that do fire under the sugar
+   drive, and the 10 highest overall under the 100-hub drive, which excites
+   them directly, so excitation and silencing overlap.
+6. **Silencing semantics.** Silence a single source with exactly one downstream
+   target that has no other input; that target records zero spikes, the
+   silenced source still records its own, and nothing else fires. Planned on
+   the subnetwork, where no such pair exists: no neuron there has out-degree 1
+   into a single-input target, and all 114 single-input neurons are fed by an
+   inhibitory seed hub, so they could never fire. Implemented on the full pack,
+   which has 56 excitatory pairs of this shape. Silencing the target instead
+   leaves its spike count unchanged, which pins "outgoing only". A `silenced`
+   that is not a bool array of shape `(N,)` raises in every lane.
 7. **Brian2 spike times.** `validate_brian2.py` extended: for each
    configuration in the existing table, the set of `(neuron, time)` from
    Brian2's `SpikeMonitor` equals ref64's event set converted with

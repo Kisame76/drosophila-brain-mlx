@@ -56,38 +56,70 @@ from lif.engine_naive import RunResult
 EDGE_SPLIT = 8           # dense drive (hub stimulus); best for both lanes
 EDGE_SPLIT_SPARSE = 2    # physiological drive, this lane (the fused lane wants 1)
 
+# A silenced source leaves through the same early exit as a quiet one. Only its
+# edges are skipped; whether it spikes is decided elsewhere, so it still fires
+# and still counts (see core.silenced_mask). engine_naive and engine_chunked
+# zero the same edges' counts instead.
+#
+# Two variants, because reading the mask is not free even when it is all false.
+# A run without a mask gets the kernel from before silencing existed, unchanged.
+# Measured 2026-09-14, fused lane, s per biological second, median of 7 runs
+# interleaved in one process:
+#
+#                                  before      one kernel,          two variants,
+#                                  silencing   all-false mask       silenced=None
+#   FlyWire + 21 sugar GRNs, K=1   0.2975      0.2987  (+0.39 %)    0.2983  (+0.25 %)
+#   MaleCNS + 100 hubs,      K=8   1.1642      1.5853  (+36.17 %)   1.1638  (-0.03 %)
+#
+# The FlyWire row is inside that session's noise. A run that does silence still
+# pays: +36.50 % on MaleCNS with 10 silenced neurons that never fire, so with an
+# unchanged spike train. Why is open; see the design doc, "Silencing".
 _SRC_TEMPLATE = """
     uint gid = thread_position_in_grid.x;
     uint i = gid / EDGE_SPLIT;
     uint k = gid % EDGE_SPLIT;
     if (i >= n_src[0]) return;
-    if (!spike[i]) return;
+    EARLY_EXIT
     int lo = row_ptr[i];
     int hi = row_ptr[i + 1];
     for (int e = lo + int(k); e < hi; e += EDGE_SPLIT) {
         atomic_fetch_add_explicit(&contrib[dst[e]], cnt[e], memory_order_relaxed);
     }
 """
+_EARLY_EXIT = {
+    False: "if (!spike[i]) return;",
+    True: "if (!spike[i] || silenced[i]) return;",
+}
 
 _kernels: dict = {}
 
 
-def _kernel_for(split: int):
-    if split not in _kernels:
-        _kernels[split] = mx.fast.metal_kernel(
-            name=f"csr_propagate_sparse_k{split}",
-            input_names=["spike", "row_ptr", "dst", "cnt", "n_src"],
+def _kernel_for(split: int, masked: bool):
+    if (split, masked) not in _kernels:
+        _kernels[split, masked] = mx.fast.metal_kernel(
+            name=f"csr_propagate_sparse{'_silenced' if masked else ''}_k{split}",
+            input_names=["spike", *(["silenced"] if masked else []),
+                         "row_ptr", "dst", "cnt", "n_src"],
             output_names=["contrib"],
-            source=_SRC_TEMPLATE.replace("EDGE_SPLIT", str(split)),
+            source=_SRC_TEMPLATE.replace("EARLY_EXIT", _EARLY_EXIT[masked])
+                                .replace("EDGE_SPLIT", str(split)),
             atomic_outputs=True,
         )
-    return _kernels[split]
+    return _kernels[split, masked]
 
 
-def propagate(spike, pack: core.Pack, n_src, split: int = EDGE_SPLIT):
-    """Scatter signed contact counts from spiking sources onto destinations."""
-    return _kernel_for(split)(
-        inputs=[spike, pack.row_ptr, pack.destinations, pack.signed_counts, n_src],
+def propagate(spike, pack: core.Pack, n_src, split: int = EDGE_SPLIT, *, silenced):
+    """Scatter signed contact counts from spiking sources onto destinations.
+
+    silenced is a bool[N] device array, or None for the variant without a mask.
+    Keyword-only, so it cannot be mistaken for split.
+    """
+    if silenced is None:
+        kernel, inputs = _kernel_for(split, False), [spike]
+    else:
+        kernel, inputs = _kernel_for(split, True), [spike, silenced]
+    return kernel(
+        inputs=inputs + [pack.row_ptr, pack.destinations, pack.signed_counts, n_src],
         output_shapes=[(pack.n_neurons,)],
         output_dtypes=[mx.int32],
         grid=(pack.n_neurons * split, 1, 1),
@@ -96,7 +128,8 @@ def propagate(spike, pack: core.Pack, n_src, split: int = EDGE_SPLIT):
     )[0]
 
 
-def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src, split: int = EDGE_SPLIT):
+def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src, silenced,
+              split: int = EDGE_SPLIT):
     def step(v, g, rfc, counts, rfc_reload, delayed, stim_row):
         rfc = mx.maximum(rfc - 1, 0)
         not_ref = rfc == 0
@@ -107,7 +140,7 @@ def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src, split: int = E
 
         spike = mx.logical_and(not_ref, v > c["v_th"])
 
-        contrib = propagate(delayed, pack, n_src, split)
+        contrib = propagate(delayed, pack, n_src, split, silenced=silenced)
         g = g + mx.where(not_ref, contrib.astype(mx.float32) * c["w_syn"], 0.0)
         # Gate and scatter on the ~100 driven neurons only. Materialising a full
         # zeros(N) buffer and masking it cost 20% of the tick in the sparse lane
@@ -125,13 +158,14 @@ def make_step(pack: core.Pack, c: dict, targets: mx.array, n_src, split: int = E
     return step
 
 
-def run(pack: core.Pack, stim: core.Stimulus, chunk: int = 64,
-        use_async: bool = True, warmup: int = 50,
+def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
+        chunk: int = 64, use_async: bool = True, warmup: int = 50,
         split: int = EDGE_SPLIT) -> RunResult:
+    mask = core.silenced_mask(pack, silenced)
     c = {k: mx.array(v) for k, v in core.constants_f32().items()}
     targets = mx.array(stim.targets)
     n_src = mx.array([pack.n_neurons], dtype=mx.uint32)
-    step = make_step(pack, c, targets, n_src, split)
+    step = make_step(pack, c, targets, n_src, mask, split)
     n = stim.n_ticks
     N = pack.n_neurons
 
