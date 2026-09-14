@@ -3,7 +3,7 @@
   "neurons": 166700,
   "edges": 24469412,
   "ticks": 2000,
-  "stimulus": "right_sugar_grns",
+  "stimulus": "top_out_degree_hubs",
   "rate_hz": 150.0,
   "seed": 20260816,
   "total_spikes": 7379,
