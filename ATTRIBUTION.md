@@ -21,6 +21,34 @@ redistributed here.
 The connectome itself is FlyWire v630. Cite FlyWire per its own policy when
 publishing results derived from it: https://flywire.ai
 
+FlyWire's data licence carries a non-commercial restriction. The exact variant
+is not restated here because it has not been verified against the source for
+this repository; read the terms at https://codex.flywire.ai before any
+commercial use. This matters mainly in contrast with MaleCNS below, which does
+not carry that restriction.
+
+## MaleCNS v1.0
+
+The second supported pack is built from the MaleCNS v1.0 flat-connectome
+release, a male specimen covering brain and ventral nerve cord. It is a
+different animal from a different laboratory than FlyWire, and results from the
+two packs are not comparable.
+
+> MaleCNS project: https://male-cns.janelia.org/
+> v1.0 data and release terms: https://male-cns.janelia.org/download/
+
+Licensed **CC BY 4.0** per the release page, i.e. attribution only, with no
+non-commercial restriction. Credit FlyEM at HHMI Janelia, the
+University of Cambridge, the MRC LMB, Google Research and the MaleCNS
+collaboration. `tools/fetch_male_cns.sh` downloads the three published Feather
+tables; none of them is redistributed here.
+
+The node selection and transmitter signs follow the materialization
+`male-cns-v1.0-superclass-non-null-known-nt`, which is also what `flyBrain`
+publishes, so the two are comparable. The model constants are Shiu et al.'s and
+were fitted to FlyWire, not to this dataset; `src/lif/compile_pack_malecns.py`
+records that in the pack manifest.
+
 ## Brian2
 
 Validation runs against Brian2 2.10.1 (CeCILL-2.1), and the closed-form update

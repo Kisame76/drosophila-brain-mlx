@@ -40,21 +40,42 @@ def main() -> int:
     ap.add_argument("--rate-hz", type=float, default=150.0)
     ap.add_argument("--seed", type=int, default=20260816)
     ap.add_argument("--out", type=Path, default=Path("bench/results.json"))
+    ap.add_argument("--pack", type=Path, default=core.PACK_DIR,
+                    help="pack directory; defaults to the FlyWire v630 pack")
+    ap.add_argument("--stimulus", choices=("auto", "sugar", "hubs"), default="auto",
+                    help="auto uses the sugar GRNs on a FlyWire pack, top-out-degree "
+                         "hubs on any other dataset")
     args = ap.parse_args()
     ticks = 2000 if args.quick else args.ticks
 
     from lif import engine_chunked, engine_fused, engine_metal, engine_naive
 
-    pack = core.load_pack()
-    targets = stimulus_flybrain.targets(pack.neuron_ids)
-    draws = stimulus_flybrain.bernoulli(len(targets), ticks, args.rate_hz,
-                                        core.DT, args.seed)
-    stim = core.Stimulus(targets=targets, draws=mx.array(draws), n_ticks=ticks,
-                         rate_hz=args.rate_hz, seed=args.seed)
+    pack = core.load_pack(args.pack)
+
+    # The 21 sugar GRNs are FlyWire root IDs. They do not exist in any other
+    # specimen, so a non-FlyWire pack falls back to the deterministic hub drive.
+    mode = args.stimulus
+    if mode == "auto":
+        mode = "sugar" if pack.manifest.get("dataset", "").startswith("flywire") else "hubs"
+
+    if mode == "sugar":
+        targets = stimulus_flybrain.targets(pack.neuron_ids)
+        draws = stimulus_flybrain.bernoulli(len(targets), ticks, args.rate_hz,
+                                            core.DT, args.seed)
+        stim = core.Stimulus(targets=targets, draws=mx.array(draws), n_ticks=ticks,
+                             rate_hz=args.rate_hz, seed=args.seed)
+        drive = f"{len(targets)} sugar GRNs"
+    else:
+        stim = core.make_stimulus(pack, ticks, args.seed, n_targets=100,
+                                  rate_hz=args.rate_hz)
+        targets = stim.targets
+        draws = np.asarray(stim.draws)
+        drive = f"{len(targets)} top-out-degree hubs"
 
     print(f"{_chip()}  |  {pack.n_neurons} neurons, {pack.n_edges} edges")
+    print(f"dataset {pack.manifest.get('dataset', 'unknown')}")
     print(f"{ticks} ticks = {ticks * core.DT / 1000:.1f} biological s, "
-          f"{len(targets)} sugar GRNs @ {args.rate_hz:g} Hz, "
+          f"{drive} @ {args.rate_hz:g} Hz, "
           f"{int(draws.sum())} input spikes\n")
 
     lanes = [

@@ -76,9 +76,25 @@ uv venv --python 3.13 && uv pip install -e .
 python -m lif.compile_pack         # builds data/pack/v630, ~114 MB
 ```
 
-`compile_pack` runs 40 validation checks and refuses to write anything if one
-fails. `python -m lif.verify_pack` audits the result independently afterwards,
-through a different code path so a bug cannot confirm itself.
+A second dataset is supported: MaleCNS v1.0, a male specimen covering brain
+**and** ventral nerve cord, 166,700 neurons, so it contains the leg and wing
+motor neurons the FlyWire brain-only pack does not. Optional and much larger to
+fetch:
+
+```bash
+./tools/fetch_male_cns.sh          # ~1.06 GB, CC BY 4.0
+python -m lif.compile_pack_malecns # builds data/pack/male_cns_v1
+python -m lif.benchmark --pack data/pack/male_cns_v1
+```
+
+Spike counts from the two packs are not comparable: different specimen,
+different laboratory, and the Shiu et al. constants were fitted to FlyWire.
+
+Both compilers run their validation checks and refuse to write anything if one
+fails. `python -m lif.verify_pack [--pack <dir>]` audits the result
+independently afterwards, through a different code path so a bug cannot confirm
+itself; it re-derives the MaleCNS node selection and transmitter signs from the
+raw tables rather than importing them.
 
 ```bash
 pytest                      # parity and determinism gates
@@ -154,9 +170,24 @@ else. Getting from 20 s to 0.29 s was three findings, in order of size:
 2. **Load imbalance.** Out-degree runs from 0 to 9,615 with a mean of 115, and
    the driven neurons are the biggest hubs. One thread per neuron serialises
    ~9,600 atomics while 127,399 idle.
-3. **Dispatch overhead.** Once propagation is sparse, runtime is entirely fixed
-   cost — ~16 kernel dispatches for the elementwise half. Fusing them into one
-   brought 1.51 s → 0.29 s.
+3. **Intermediate materialisation.** Once propagation is sparse, the cost is the
+   elementwise half: MLX writes every intermediate to memory, so a chain of ~16
+   ops moves 15.6 MiB per tick through DRAM at 114 GiB/s while the values
+   themselves fit in registers. Fusing the chain into one kernel moves 1.0 MiB
+   and brought 1.51 s → 0.29 s.
+
+   This was written up as *dispatch overhead* until it was measured properly.
+   It is not: 16 kernel dispatches inside one `mx.eval` cost what one costs
+   (0.1117 ms vs 0.1121 ms). The ~0.11 ms floor is per `eval`, not per dispatch.
+   A standalone microbenchmark of the same 16 ops gives 0.1333 ms/tick chained
+   against 0.0225 ms fused, a 5.9x that matches the 5.2x seen in the engine.
+
+## MLX notes
+
+The transferable findings, with the measurements behind them, are in
+[docs/mlx-notes.md](docs/mlx-notes.md): what to measure first, why fusing
+elementwise chains is the largest single win, why `eval` and not the dispatch is
+the unit of overhead, and the two limitations below in more detail.
 
 ## Two MLX limitations worth knowing
 
@@ -247,6 +278,14 @@ Recorded so nobody repeats them:
   state it fakes a one-tick lag, which cost me two "fixes" to the refractory and
   delay constants before I caught it. Compare monitor row `t+1` against engine
   tick `t`. The correct values are the plain quotients: 22 and 18 ticks.
+
+## Roadmap
+
+The engine is the simulation half of the published model. The experiment half
+(activate a set of neurons, silence another, 30 trials, rates) is what comes
+next, with the same `run_exp` signature and parquet output as the original so
+its notebooks run unchanged. Order, conditions and what is deliberately left
+out: [ROADMAP.md](ROADMAP.md).
 
 ## License and attribution
 
