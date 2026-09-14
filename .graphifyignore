@@ -1,0 +1,17 @@
+# Read after .gitignore, and it can only ever exclude more: everything already
+# ignored by .gitignore (data/, work/, .venv/, outputs/, *.npy) stays out
+# without being repeated here.
+
+# Never let the graph ingest its own output.
+graphify-out/
+
+# Boilerplate legal text. Contributes vocabulary, not structure.
+LICENSE
+
+# Measured benchmark output, rewritten on every run. The numbers belong in the
+# README where they are explained; as a graph node the bare JSON is noise.
+bench/results.json
+
+# Editor and tool state.
+.claude/
+.pytest_cache/
