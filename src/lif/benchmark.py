@@ -148,7 +148,7 @@ def main() -> int:
         "neurons": pack.n_neurons,
         "edges": pack.n_edges,
         "ticks": ticks,
-        "stimulus": "right_sugar_grns",
+        "stimulus": "right_sugar_grns" if mode == "sugar" else "top_out_degree_hubs",
         "rate_hz": args.rate_hz,
         "seed": args.seed,
         "total_spikes": int(ref.total_spikes()),
