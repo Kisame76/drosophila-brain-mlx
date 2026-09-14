@@ -68,7 +68,7 @@ Read the comparisons carefully:
 - **vs. flyBrain (~22 %)** is a narrow win over a small, young project, and it
   costs 7× the memory. Their engine also processes more spikes in this run
   because its refractory semantics differ (see below); at equal spike counts the
-  margin is smaller, and on a busy machine it disappears (below).
+  margin is smaller, and under CPU load it falls to ~10 % (below).
 
 ### How much to trust these
 
@@ -96,10 +96,12 @@ measurement on a machine under CPU load (load average 2.8, an Electron app at
 The GPU work is identical in both cases; the spike-count SHA-256 never changes.
 The difference is that this engine rebuilds its MLX graph on the host every
 chunk, and that host work competes for CPU, while a native Rust loop does not.
-So the honest statement is not a flat "22 % faster than flyBrain" but **"22 %
-faster on a quiet machine, shrinking to roughly parity as the host gets
-busy."** If you benchmark this yourself and get a worse number than the table,
-check your CPU load before suspecting your build.
+
+This lane is faster than flyBrain in **both** states measured, but by very
+different amounts: **22 % on a quiet machine, 10 % under the load above.** Two
+points is not a curve, so no claim is made about where it ends up on a busier
+host than was tested. If you benchmark this yourself and get a worse number than
+the table, check your CPU load before suspecting your build.
 
 ## Datasets
 
