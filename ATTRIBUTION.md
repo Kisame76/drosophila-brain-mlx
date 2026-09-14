@@ -29,7 +29,11 @@ for `method='linear'`. https://briansimulator.org
 
 ## flyBrain
 
-`mehrantsi/flyBrain` (MIT) is used as a performance reference only.
+`mehrantsi/flyBrain` (MIT) is both a performance reference and a source of ideas.
+Its MLX lane demonstrated `mx.fast.metal_kernel` for CSR propagation, and its
+description of fusing decay/threshold work with propagation is the basis for the
+two-dispatch tick in `src/lif/engine_fused.py` — the largest single speedup in
+this repository.
 `tools/setup_flybrain_reference.sh` clones and builds it locally; no code from it
 is vendored or redistributed here. That script disables its MuJoCo-dependent
 modules so the neural benchmark builds without MuJoCo — the compute core
