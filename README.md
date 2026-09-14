@@ -173,22 +173,46 @@ hand-written kernel it *is* controllable — `#pragma clang fp contract(off)`.
 last-write-wins, not accumulation. `arr.at[idx].add()` and `mx.fast.metal_kernel`
 are the only options.
 
-## A note on the reference engine
+## Credit where it is due: flyBrain
 
-[`mehrantsi/flyBrain`](https://github.com/mehrantsi/flyBrain)'s README states that
-incoming conductance can accumulate while a neuron is refractory, "matching the
-upstream Brian2 equations". For Brian2 2.10.1 with this model formulation it does
-not: `(unless refractory)` shields the variable from *every* write, synaptic
-input included. Measured directly — a spike arriving at a refractory neuron
-leaves its `g` at exactly `0.00000`, before and after the refractory period ends.
-Arrivals are dropped, not queued.
+[`mehrantsi/flyBrain`](https://github.com/mehrantsi/flyBrain) (MIT) is a
+Rust/Metal engine for the same model. Two of the three findings above came from
+reading it, and it is only fair to say so plainly:
 
-With a bit-identical stimulus, disabling the gate moves this engine from 13,354
-to 17,315 spikes, close to their 16,796 — so that is the dominant difference,
-though a residual of 819 spikes remains unexplained.
+- **It got to `mx.fast.metal_kernel` first.** Its MLX lane already propagates CSR
+  through a hand-written Metal kernel with one thread per source neuron and an
+  early exit — the same shape as the kernel here. Its README's remark about
+  per-tick host synchronisation is what prompted this project in the first place.
+- **Kernel fusion came straight from its README**, which describes fusing
+  decay/threshold work with CSR propagation to remove a full-neuron dispatch per
+  tick. Applying that idea took this engine from 1.51 s to 0.29 s — the single
+  largest step here, and not my idea.
+- Its benchmark setup (sugar-GRN stimulus, chunked steps, excluding pack load and
+  shader compilation) is what made a fair comparison possible at all.
 
-`tools/setup_flybrain_reference.sh` builds their engine locally to reproduce the
-comparison.
+What this engine adds on top is the edge-split for load imbalance, which its
+kernel does not do, and a stricter parity gate.
+
+`tools/setup_flybrain_reference.sh` builds it locally so anyone can re-run the
+comparison instead of taking the numbers on trust.
+
+### One open discrepancy
+
+Its README states that incoming conductance can accumulate while a neuron is
+refractory, "matching the upstream Brian2 equations". As far as I can measure,
+Brian2 2.10.1 with this model formulation does the opposite: `(unless
+refractory)` shields the variable from *every* write, synaptic input included. A
+spike arriving at a refractory neuron leaves its `g` at exactly `0.00000`, before
+and after the refractory period ends — dropped, not queued.
+
+This matters because it changes results: with a bit-identical stimulus, disabling
+the gate here moves 13,354 spikes to 17,315, close to their 16,796. A residual of
+819 spikes stays unexplained, so there is likely a second difference I have not
+found, and I may simply be wrong about how their engine handles this — I have not
+read their kernel closely enough to claim otherwise.
+
+Reproduce the Brian2 side with `python -m lif.validate_brian2` and the two-neuron
+case described in the source. Corrections welcome.
 
 ## Repository
 
