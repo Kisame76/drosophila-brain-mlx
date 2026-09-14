@@ -77,8 +77,8 @@ because a benchmark nobody can falsify is not a benchmark.
 
 **The sparse Metal lane was mistuned, and the table overstated what fusion
 bought.** That lane ran at `EDGE_SPLIT = 16`, this module's old default, which
-an end-to-end sweep shows is optimal in none of the four dataset/stimulus
-combinations tested. At the correct `K = 2` it is 2.0× faster than previously
+is fastest in none of the six lane and drive combinations swept under [Use](#use).
+At the correct `K = 2` it is 2.0× faster than previously
 published: 1.5163 → 0.7491. The fused lane was already at its optimum and did
 not move. But the fusion step was being credited against that bad baseline, so
 its gain drops from a published 5.2× to a measured **2.55×**. The fastest
@@ -376,20 +376,22 @@ case described in the source. Corrections welcome.
 
 ```
 src/lif/
-  compile_pack.py      FlyWire CSV/parquet -> source-major CSR pack, 40 checks
-  verify_pack.py       independent audit of a written pack
-  core.py              constants, pack loader, stimulus, initial state
-  engine_naive.py      eval() per tick — the deliberately slow baseline
-  engine_chunked.py    N ticks per eval, async_eval
-  engine_metal.py      sparse CSR propagation via mx.fast.metal_kernel
-  engine_fused.py      whole tick in two Metal dispatches — the fast lane
-  engine_ref64.py      float64 correctness oracle, not a performance lane
-  subnet.py            connected subnetwork for Brian2 validation
-  validate_brian2.py   Brian2 vs ref64 vs MLX
-  benchmark.py         reproduces the results table
-tests/                 parity and determinism gates
-bench/results.json     measured numbers, written by the benchmark
-tools/                 upstream fetch, reference engine build
+  compile_pack.py          FlyWire CSV/parquet -> source-major CSR pack, 40 checks
+  compile_pack_malecns.py  MaleCNS v1.0 tables -> the same pack format
+  verify_pack.py           independent audit of a written pack
+  core.py                  constants, pack loader, stimulus, initial state
+  stimulus_flybrain.py     flyBrain's splitmix64 sugar-GRN stimulus
+  engine_naive.py          eval() per tick — the deliberately slow baseline
+  engine_chunked.py        N ticks per eval, async_eval
+  engine_metal.py          sparse CSR propagation via mx.fast.metal_kernel
+  engine_fused.py          whole tick in two Metal dispatches — the fast lane
+  engine_ref64.py          float64 correctness oracle, not a performance lane
+  subnet.py                connected subnetwork for Brian2 validation
+  validate_brian2.py       Brian2 vs ref64 vs MLX
+  benchmark.py             reproduces the results tables
+tests/                     parity and determinism gates, benchmark and stimulus checks
+bench/results*.json        measured numbers, written by the benchmark
+tools/                     upstream fetch, reference engine build
 ```
 
 ### Things that did not work

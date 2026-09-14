@@ -242,8 +242,12 @@ Measured, ms per propagation:
 | 21 | 1,547 | 0.1442 | **0.1245** | 0.1379 | 0.1608 | 0.2114 | 0.3117 | 0.5106 |
 | 107 | 379,545 | 0.8866 | 0.5755 | 0.4329 | **0.3612** | 0.3640 | 0.3840 | 0.5619 |
 
-Two things to take from it. **There is no single best K**: 2 when the work is
-tiny, 8 to 16 when it is not, and the penalty for picking badly is 2.5x. And
+Two things to take from it. **There is no single best K**: per propagation, 2
+when the work is tiny and 8 to 16 when it is not, with K=1 at 107 active rows
+taking 2.5x as long as K=8. End to end the spread is wider and 16 drops out:
+swept over K = 1 to 16 in both kernel lanes on both packs, 16 was fastest in
+none of six lane and drive combinations, and the slowest K took up to 3.80x as
+long as the fastest (README, "Use"). And
 **the engine cannot choose K at runtime** without reading the active count back
 to the host, which is the synchronisation the whole design exists to avoid. So
 it stays a parameter the caller sets, and that is an honest limitation rather
