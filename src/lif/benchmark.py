@@ -14,7 +14,6 @@ import argparse
 import json
 import platform
 import subprocess
-import time
 from pathlib import Path
 
 import mlx.core as mx
@@ -34,8 +33,9 @@ def _chip() -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--ticks", type=int, default=10_000)
-    ap.add_argument("--quick", action="store_true", help="2000 ticks")
+    run_length = ap.add_mutually_exclusive_group()
+    run_length.add_argument("--ticks", type=int, default=10_000)
+    run_length.add_argument("--quick", action="store_true", help="2000 ticks")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--rate-hz", type=float, default=150.0)
     ap.add_argument("--seed", type=int, default=20260816)
@@ -55,12 +55,14 @@ def main() -> int:
     from lif import engine_chunked, engine_fused, engine_metal, engine_naive
 
     pack = core.load_pack(args.pack)
+    dataset = pack.manifest.get("dataset", "unknown")
 
     # The 21 sugar GRNs are FlyWire root IDs. They do not exist in any other
-    # specimen, so a non-FlyWire pack falls back to the deterministic hub drive.
+    # specimen, so auto picks the deterministic hub drive on a non-FlyWire pack,
+    # and --stimulus sugar there stops in stimulus_flybrain.targets.
     mode = args.stimulus
     if mode == "auto":
-        mode = "sugar" if pack.manifest.get("dataset", "").startswith("flywire") else "hubs"
+        mode = "sugar" if dataset.startswith("flywire") else "hubs"
 
     if mode == "sugar":
         targets = stimulus_flybrain.targets(pack.neuron_ids)
@@ -83,10 +85,10 @@ def main() -> int:
     # meaningless is a value wrong for the drive, not a different value per lane:
     # with the fused lane hardcoded to 1 and the sparse one at the old module
     # default of 16, the fused lane came out slower on a hub stimulus than the
-    # lane it replaces. One shared value would misreport a lane on the sugar
-    # drive, where the fused lane at 2 takes 1.16x its time at 1. --edge-split
-    # sets both anyway, for comparing the lanes at one setting rather than each at
-    # its best.
+    # lane it replaces. --edge-split sets one value for both, for comparing the
+    # lanes at one setting rather than each at its best, and that value can
+    # misreport a lane: on the sugar drive the fused lane at 2 takes 1.16x its
+    # time at 1. The results file records the value each lane ran at.
     if mode == "sugar":
         split_metal, split_fused = engine_metal.EDGE_SPLIT_SPARSE, 1
     else:
@@ -95,25 +97,26 @@ def main() -> int:
         split_metal = split_fused = args.edge_split
 
     print(f"{_chip()}  |  {pack.n_neurons} neurons, {pack.n_edges} edges")
-    print(f"dataset {pack.manifest.get('dataset', 'unknown')}")
+    print(f"dataset {dataset}")
     print(f"{ticks} ticks = {ticks * core.DT / 1000:.1f} biological s, "
           f"{drive} @ {args.rate_hz:g} Hz, "
           f"{int(draws.sum())} input spikes, "
           f"edge_split {split_metal} (metal) / {split_fused} (fused)\n")
 
+    # (name, edge_split, run); the dense lanes have no edge_split
     lanes = [
-        ("naive dense (eval/tick)", lambda: engine_naive.run(pack, stim, warmup=50)),
-        ("chunked dense", lambda: engine_chunked.run(pack, stim, chunk=64, warmup=50)),
-        ("sparse metal kernel", lambda: engine_metal.run(pack, stim, chunk=32, warmup=50,
-                                                          split=split_metal)),
-        ("fused, 2 dispatches", lambda: engine_fused.run(pack, stim, chunk=32,
-                                                         warmup=50, edge_split=split_fused)),
+        ("naive dense (eval/tick)", None, lambda: engine_naive.run(pack, stim, warmup=50)),
+        ("chunked dense", None, lambda: engine_chunked.run(pack, stim, chunk=64, warmup=50)),
+        ("sparse metal kernel", split_metal,
+         lambda: engine_metal.run(pack, stim, chunk=32, warmup=50, split=split_metal)),
+        ("fused, 2 dispatches", split_fused,
+         lambda: engine_fused.run(pack, stim, chunk=32, warmup=50, edge_split=split_fused)),
     ]
 
     print(f"{'lane':<26}{'s/biol.s':>10}{'ms/tick':>10}{'peak MB':>9}  parity")
     ref = None
     results = {}
-    for name, fn in lanes:
+    for name, split, fn in lanes:
         times = []
         for _ in range(args.repeat):
             r = fn()
@@ -136,6 +139,7 @@ def main() -> int:
             "ms_per_tick": best / ticks * 1000,
             "peak_bytes": r.peak_bytes,
             "parity": parity,
+            "edge_split": split,
             "runs": times,
         }
 
@@ -145,6 +149,7 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps({
         "device": _chip(),
+        "dataset": dataset,
         "neurons": pack.n_neurons,
         "edges": pack.n_edges,
         "ticks": ticks,
