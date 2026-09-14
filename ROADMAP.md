@@ -21,12 +21,14 @@ The order below is the reason the phases are numbered the way they are.
 ## Where it stands
 
 The engine runs the published Shiu et al. model at 0.29 s per biological second
-on an M4 Pro, parity-gated against Brian2. What it cannot do yet is the thing
-the published model is *for*: activate a set of neurons, silence another, run 30
-trials and read out firing rates. Today the repository supports exactly one
-experiment, and it is a constant in the code. Closing that gap is phase 1.
+on an M4 Pro, parity-gated against Brian2, on FlyWire v630; MaleCNS v1.0 runs
+through the same four lanes. A run can drive any chosen set of neurons
+(`core.Stimulus`) and silence another (`silenced=`). What it cannot do yet is
+the rest of what the published model is *for*: record which neuron fired when,
+run 30 trials and read out firing rates through upstream's `run_exp` and parquet
+format. Closing that gap is the rest of phase 1.
 
-## Phase 0: MaleCNS pack (in progress)
+## Phase 0: MaleCNS pack (done)
 
 A second dataset through the same pack compiler. MaleCNS v1.0 is a male
 specimen covering brain **and** ventral nerve cord: 166,700 neurons, including
@@ -41,13 +43,19 @@ Done when
   are not comparable across specimens
 - `ATTRIBUTION.md` credits the MaleCNS collaboration and notes CC BY 4.0
 
-Known property of the published materialization, recorded in the manifest:
-11,609 of 166,700 neurons have no signed transmitter and therefore no outgoing
-edges. 8,024 of those are histaminergic, and histamine is the photoreceptor
-transmitter in the fly, so most of the retina's output is absent from the
-signed graph. The model constants are
-reused unchanged from Shiu et al.; they were fitted to FlyWire, not to this
-dataset.
+All four hold, re-checked on 2026-09-14: a rebuild passes every compiler check
+and is byte-identical to the pack in use, `verify_pack` reports it verified, all
+four lanes pass parity in `lif.benchmark`, and the README table and
+`ATTRIBUTION.md` are in place.
+
+Known property of the published materialization: 11,609 of 166,700 neurons
+have no signed transmitter and therefore no outgoing edges. The compiler's `nt`
+check prints that count; the manifest records 11,793 neurons without outputs,
+which also counts 184 neurons that have a signed transmitter but no kept
+outgoing edge. 7,891 of the 11,609 are histaminergic, and histamine is the
+photoreceptor transmitter in the fly, so most of the retina's output is absent
+from the signed graph. The model constants are reused unchanged from Shiu et
+al.; they were fitted to FlyWire, not to this dataset.
 
 ## Phase 1: experiment layer
 
@@ -82,10 +90,11 @@ One standard experiment is 30 trials of 1 biological second:
 
 ### What it costs to build
 
-Two engine additions, both parity-gated across all four lanes:
-**spike-event recording** (which neuron fired in which tick) and **silencing**.
-Recording also lets the Brian2 validation compare spike *times*, not only
-counts, which makes the correctness gate stronger than it is today.
+Two engine additions, both parity-gated across all four lanes: **silencing**,
+which is in, and **spike-event recording** (which neuron fired in which tick),
+which is next. Recording also lets the Brian2 validation compare spike *times*,
+not only counts, which makes the correctness gate stronger than it is today.
+After it come the two-rate stimulus and `run_exp` itself.
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 

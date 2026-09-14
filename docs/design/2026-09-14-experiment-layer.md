@@ -1,7 +1,8 @@
 # Experiment layer: `run_exp` compatible with the published model
 
-Date: 2026-09-14. Status: design, awaiting review. Implements phase 1 of
-[ROADMAP.md](../../ROADMAP.md).
+Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
+spike-event recording, the two-rate stimulus and `run_exp` not yet. Implements
+phase 1 of [ROADMAP.md](../../ROADMAP.md).
 
 ## Goal
 
@@ -353,7 +354,7 @@ the full pack.
 ## Measurements to add to the README
 
 - fused lane with `record=True`, s per biological second and peak memory
-- fused lane with a non-empty `silenced` mask
+- fused lane with a non-empty `silenced` mask: done, README "Use"
 - `run_exp` end to end, 30 trials, sugar stimulus: total wall clock, and the
   Brian2 figure it replaces (31 min, extrapolated from the measured 62.6 s per
   trial and stated as such)
