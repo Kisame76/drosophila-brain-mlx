@@ -76,18 +76,17 @@ def main() -> int:
         draws = np.asarray(stim.draws)
         drive = f"{len(targets)} top-out-degree hubs"
 
-    # edge_split is load-dependent and there is no runtime-choosable value (see
-    # engine_metal.py): a handful of driven neurons wants a small K, a hub drive
-    # wants a large one. Both kernel lanes must get the SAME K or the comparison
-    # between them is meaningless -- which is exactly what happened when this was
-    # hardcoded to 1 for the fused lane and left at the module default of 16 for
-    # the sparse one: on a hub stimulus the fused lane came out slower than the
-    # lane it replaces, purely from the mismatched constant.
-    # Per-lane, because they do not share an optimum: on a sparse drive the fused
-    # lane wants 1 and the sparse lane wants 2 (0.3353 vs 0.3786 for fused at K=2,
-    # a 13% error if forced to match). Both explicit, both measured; see the table
-    # in engine_metal.py. --edge-split overrides both, for comparing the lanes at
-    # one setting rather than each at its best.
+    # edge_split has no runtime-choosable value (see engine_metal.py), so each
+    # kernel lane runs at the value measured best for the drive: 1 for the fused
+    # lane and 2 for the sparse one on the sugar drive, 8 for both on the hub
+    # drive (table in README.md, "Use"). What makes a comparison between the lanes
+    # meaningless is a value wrong for the drive, not a different value per lane:
+    # with the fused lane hardcoded to 1 and the sparse one at the old module
+    # default of 16, the fused lane came out slower on a hub stimulus than the
+    # lane it replaces. One shared value would misreport a lane on the sugar
+    # drive, where the fused lane at 2 takes 1.16x its time at 1. --edge-split
+    # sets both anyway, for comparing the lanes at one setting rather than each at
+    # its best.
     if mode == "sugar":
         split_metal, split_fused = engine_metal.EDGE_SPLIT_SPARSE, 1
     else:
