@@ -38,17 +38,20 @@ from lif.engine_naive import RunResult
 #       21    1547  0.1442  0.1245* 0.1379  0.1608  0.2114  0.3117  0.5106
 #      107  379545  0.8866  0.5755  0.4329  0.3612* 0.3640  0.3840  0.5619
 #
-# End-to-end over 2000 ticks, s per biological second, per kernel lane:
+# End to end, s per biological second at the best K, median of 7 runs interleaved
+# in one process per pack, measured 2026-09-14; every K in README.md, "Use":
 #
-#   FlyWire + 21 sugar GRNs    metal  K=2 best (0.8627)   fused  K=1 best (0.3353)
-#   MaleCNS + 100 hubs         metal  K=8 best (2.0118)   fused  K=8 best (1.3519)
+#                                ticks   metal         fused
+#   FlyWire + 21 sugar GRNs     10,000   K=2 0.7457    K=1 0.3010
+#   FlyWire + 100 hubs           2,000   K=8 1.6228    K=8 1.1400
+#   MaleCNS + 100 hubs           2,000   K=8 1.7096    K=8 1.1680
 #
 # Two things that cost real time before they were measured. K=16 was this
-# module's default and is optimal in none of the four cases; on the sugar drive
-# it made the sparse lane twice as slow as it needed to be. And the two kernel
-# lanes do not share an optimum on a sparse drive (1 vs 2), because the fused
-# kernel dispatches different non-propagation work alongside it, so a benchmark
-# that forces one value on both misreports one of them.
+# module's default and is fastest in none of the six; on the sugar drive it makes
+# the sparse lane 2.06x as slow as it needs to be. And on the sugar drive the
+# fused lane at the sparse lane's K=2 takes 1.16x its time at K=1, while the
+# sparse lane at K=1 is within 0.1 % of K=2, so a benchmark that forces 2 on both
+# misreports the fused lane.
 #
 # There is still no runtime-choosable value: picking K from the live spike count
 # needs a host readback, which is exactly the synchronisation the chunked design
