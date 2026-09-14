@@ -29,22 +29,21 @@ from lif.engine_naive import RunResult
 # through it. One thread per neuron (EDGE_SPLIT = 1) collapses on load
 # imbalance: out-degree runs from 0 to 9615 with a mean of 115, and the driven
 # neurons are precisely the biggest hubs, so a single thread would serialise
-# ~9600 atomics while 127,399 others idle. Measured on a realistic mask
-# (107 spiking neurons, 188,263 active edges):
-#     K=1: 0.406 ms   K=4: 0.130   K=16: 0.098   K=64: 0.217   K=256: 0.801
-# K=16 wins; beyond it the cost of dispatching N*K threads dominates.
-# How many threads cooperate on one source neuron's edge list. The right value
-# depends on how much of the network is firing, and the spread is large:
+# ~9600 atomics while 127,399 others idle.
 #
-#   load                      K=1     K=2     K=4     K=16    K=32
-#   2 spikes / 184 edges     0.0297  0.0142  0.0255  0.0684  0.0988   ms
-#   107 spikes / 188k edges  0.4058  0.1303* 0.0983  0.0983  0.8006   ms   (*K=4)
+# Measured 2026-09-14, M4 Pro, ms per propagate() call, 200 reps after warmup:
 #
-# High load needs the split to break up hub serialisation (out-degree reaches
-# 9615); low load is dominated by dispatching N*K threads that immediately exit.
-# There is no single best value, and the engine cannot pick one at runtime
-# without reading the spike count back to the host -- which is exactly the
-# synchronisation the chunked design exists to avoid. So it is a parameter.
+#   active  edges     K=1     K=2     K=4     K=8     K=16    K=32    K=64
+#        2     159  0.1957  0.1771* 0.1982  0.1815  0.2228  0.3188  0.5313
+#       21    1547  0.1442  0.1245* 0.1379  0.1608  0.2114  0.3117  0.5106
+#      107  379545  0.8866  0.5755  0.4329  0.3612* 0.3640  0.3840  0.5619
+#
+# There is no single best value and picking badly costs up to 2.5x. The small
+# loads are dominated by the ~0.11 ms per-eval floor, which is why K barely
+# matters there; the 107-hub row is real work and needs the split to break up
+# hub serialisation. The engine cannot choose K at runtime without reading the
+# spike count back to the host, which is exactly the synchronisation the chunked
+# design exists to avoid. So it is a parameter.
 EDGE_SPLIT = 16          # good for dense drive (hub stimulus)
 EDGE_SPLIT_SPARSE = 2    # good for physiological drive (e.g. 21 sugar GRNs)
 

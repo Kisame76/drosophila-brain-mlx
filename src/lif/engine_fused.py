@@ -2,8 +2,12 @@
 
 Phase 5 made the propagation sparse and moved the bottleneck: at 0.153 ms/tick
 the cost no longer depends on activity at all (1.524 s/biol.s at 3,204 spikes vs
-1.553 s at 51,338 -- a factor 16 in work, 2% in time). What remains is fixed
-per-tick overhead, roughly 16 kernel dispatches for the elementwise half.
+1.553 s at 51,338 -- a factor 16 in work, 2% in time). What remains is the elementwise
+half, and its cost is memory traffic, not dispatch count: MLX materialises every
+intermediate, so a chain of ~16 ops moves 15.6 MiB per tick through DRAM while
+the values fit in registers. (16 dispatches inside one eval cost what one costs,
+0.1117 vs 0.1121 ms; the ~0.11 ms floor is per eval. Measured separately: the
+same 16 ops chained are 0.1333 ms/tick, fused 0.0225 ms/tick.)
 
 flyBrain's README describes the fix for their Rust/Metal engine: fuse the
 decay/threshold work with the CSR propagation so there is no full-neuron

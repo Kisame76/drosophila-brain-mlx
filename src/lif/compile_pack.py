@@ -409,12 +409,27 @@ def build_csr(
 # ---------------------------------------------------------------- write
 
 
+# Dataset-specific manifest text. The FlyWire entry is the original and stays
+# the default, so the v630 pack keeps producing a byte-identical manifest.
+FLYWIRE_SEMANTICS = {
+    "index_mapping": "model index i == row i of the completeness CSV, in file order",
+    "signed_counts": "signed synaptic contact count == 'Excitatory x Connectivity'; "
+                     "sign is the neurotransmitter polarity, magnitude the contact count",
+    "weight_application": "runtime multiplies accumulated int32 counts by w_syn = 0.275 mV; "
+                          "never accumulate in float",
+    "row_ptr": "int32[N+1], row_ptr[i]..row_ptr[i+1] are the outgoing edges of source neuron i",
+    "destinations": "int32[E], ascending within each row",
+}
+
+
 def write_pack(
     out_dir: Path,
     arrays: dict[str, np.ndarray],
     stats: dict,
     sources: dict[str, dict],
     log: CheckLog,
+    dataset: str = "flywire-v630",
+    semantics: dict | None = None,
 ) -> dict:
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -439,21 +454,13 @@ def write_pack(
 
     manifest = {
         "pack_format": "source-major-csr/1",
-        "dataset": "flywire-v630",
+        "dataset": dataset,
         "neurons": int(arrays["neuron_ids"].size),
         "edges": int(arrays["destinations"].size),
         "arrays": entries,
         "stats": stats,
         "sources": sources,
-        "semantics": {
-            "index_mapping": "model index i == row i of the completeness CSV, in file order",
-            "signed_counts": "signed synaptic contact count == 'Excitatory x Connectivity'; "
-                             "sign is the neurotransmitter polarity, magnitude the contact count",
-            "weight_application": "runtime multiplies accumulated int32 counts by w_syn = 0.275 mV; "
-                                  "never accumulate in float",
-            "row_ptr": "int32[N+1], row_ptr[i]..row_ptr[i+1] are the outgoing edges of source neuron i",
-            "destinations": "int32[E], ascending within each row",
-        },
+        "semantics": semantics if semantics is not None else FLYWIRE_SEMANTICS,
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
