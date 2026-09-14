@@ -1,0 +1,25 @@
+[project]
+name = "mlx-lif-engine"
+version = "0.1.0"
+description = "MLX-native leaky integrate-and-fire engine for the FlyWire Drosophila connectome"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+  "mlx>=0.32.0",
+  "numpy>=2.0",
+  "pyarrow>=18",
+]
+
+[project.optional-dependencies]
+# Only needed to reproduce the Brian2 validation; the engines do not import it.
+reference = ["brian2>=2.9.0"]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
