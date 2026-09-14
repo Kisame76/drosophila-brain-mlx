@@ -1,9 +1,9 @@
 """Reimplementation of flyBrain's splitmix64 counter stimulus.
 
-Used only to compare the two engines under a bit-identical input. Transcribed
-from work/flyBrain/rust/src/stimulus.rs (EventSchedule::bernoulli + splitmix64).
-Lane order follows RIGHT_SUGAR_GRN_IDS as written, not sorted -- protocol.rs
-pushes indices in array order.
+Used to compare the two engines under a bit-identical input, and as a sparse
+drive in the tests. Transcribed from work/flyBrain/rust/src/stimulus.rs
+(EventSchedule::bernoulli + splitmix64). Lane order follows RIGHT_SUGAR_GRN_IDS
+as written, not sorted -- protocol.rs pushes indices in array order.
 """
 
 from __future__ import annotations
@@ -47,6 +47,15 @@ def bernoulli(n_targets: int, steps: int, rate_hz: float, dt_ms: float,
 
 
 def targets(neuron_ids: np.ndarray) -> np.ndarray:
-    """Model indices of the sugar GRNs, in the engine's lane order."""
+    """Model indices of the sugar GRNs, in the engine's lane order.
+
+    Raises if any is missing rather than skipping it. They are FlyWire root IDs:
+    on MaleCNS a lookup that skips absent IDs finds none of the 21, and the drive
+    would be empty without an error.
+    """
     pos = {int(v): i for i, v in enumerate(neuron_ids)}
-    return np.array([pos[i] for i in RIGHT_SUGAR_GRN_IDS if i in pos], dtype=np.int32)
+    missing = [i for i in RIGHT_SUGAR_GRN_IDS if i not in pos]
+    if missing:
+        raise ValueError(f"{len(missing)} of {len(RIGHT_SUGAR_GRN_IDS)} sugar GRNs are not "
+                         f"in this pack: {missing}")
+    return np.array([pos[i] for i in RIGHT_SUGAR_GRN_IDS], dtype=np.int32)
