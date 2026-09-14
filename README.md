@@ -118,14 +118,16 @@ al. constants were fitted to FlyWire only.
 | licence | non-commercial | CC BY 4.0 |
 
 MaleCNS, 2,000 ticks, 100 top-out-degree hubs at 150 Hz, `K = 8` for both kernel
-lanes, all four parity-gated against the naive baseline:
+lanes, all four parity-gated against the naive baseline. Measured 2026-09-14,
+best of 3 runs, load average 1.79 before and 1.33 after; written to
+`bench/results_malecns.json` by the MaleCNS command under [Install](#install):
 
 | Engine | s / biological s | Peak memory |
 |---|---|---|
-| **this, fused — 2 Metal dispatches** | **1.360** | 441 MB |
-| this, sparse Metal kernel | 2.044 | 412 MB |
-| this, dense MLX (chunked) | 37.13 | 1202 MB |
-| this, dense MLX (eval per tick) | 39.32 | 432 MB |
+| **this, fused — 2 Metal dispatches** | **1.1676** (±0.0010, n=3) | 434 MB |
+| this, sparse Metal kernel | 1.7055 (±0.0013, n=3) | 412 MB |
+| this, dense MLX (chunked) | 31.86 (±0.015, n=3) | 1204 MB |
+| this, dense MLX (eval per tick) | 34.21 (±0.024, n=3) | 434 MB |
 
 The surviving edge count, 24,469,412, is the same figure flyBrain publishes for
 the same published materialization, reached through an independently written
@@ -150,7 +152,7 @@ fetch:
 ```bash
 ./tools/fetch_male_cns.sh          # ~1.06 GB, CC BY 4.0
 python -m lif.compile_pack_malecns # builds data/pack/male_cns_v1
-python -m lif.benchmark --pack data/pack/male_cns_v1
+python -m lif.benchmark --quick --repeat 3 --pack data/pack/male_cns_v1 --out bench/results_malecns.json
 ```
 
 Spike counts from the two packs are not comparable: different specimen,

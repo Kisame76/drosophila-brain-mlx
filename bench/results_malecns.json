@@ -1,5 +1,6 @@
 {
   "device": "Apple M4 Pro",
+  "dataset": "male-cns-v1.0-superclass-non-null-known-nt",
   "neurons": 166700,
   "edges": 24469412,
   "ticks": 2000,
@@ -10,39 +11,51 @@
   "spike_counts_sha256": "acd6b5044a6667d6efcefd9f6d0aab34b43ab70ef4af8dea8aa6f073c7ecb2e9",
   "lanes": {
     "naive dense (eval/tick)": {
-      "seconds_per_biological_second": 34.494592914998066,
-      "ms_per_tick": 3.4494592914998066,
-      "peak_bytes": 431506480,
+      "seconds_per_biological_second": 34.20669479000935,
+      "ms_per_tick": 3.420669479000935,
+      "peak_bytes": 434193456,
       "parity": "baseline",
+      "edge_split": null,
       "runs": [
-        6.898918582999613
+        6.842724249996536,
+        6.84133895800187,
+        6.8507534170057625
       ]
     },
     "chunked dense": {
-      "seconds_per_biological_second": 32.13880291499663,
-      "ms_per_tick": 3.213880291499663,
-      "peak_bytes": 1201920492,
+      "seconds_per_biological_second": 31.858141249977052,
+      "ms_per_tick": 3.185814124997705,
+      "peak_bytes": 1203935724,
       "parity": "PASS",
+      "edge_split": null,
       "runs": [
-        6.427760582999326
+        6.37162824999541,
+        6.373259167005017,
+        6.37748170899431
       ]
     },
     "sparse metal kernel": {
-      "seconds_per_biological_second": 1.7058949999955075,
-      "ms_per_tick": 0.17058949999955075,
+      "seconds_per_biological_second": 1.7054537500007425,
+      "ms_per_tick": 0.17054537500007427,
       "peak_bytes": 411659848,
       "parity": "PASS",
+      "edge_split": 8,
       "runs": [
-        0.3411789999991015
+        0.34109075000014855,
+        0.34161554199818056,
+        0.34139220899669454
       ]
     },
     "fused, 2 dispatches": {
-      "seconds_per_biological_second": 1.1642424999990908,
-      "ms_per_tick": 0.11642424999990908,
+      "seconds_per_biological_second": 1.1676366650135606,
+      "ms_per_tick": 0.11676366650135606,
       "peak_bytes": 433934380,
       "parity": "PASS",
+      "edge_split": 8,
       "runs": [
-        0.23284849999981816
+        0.2335273330027121,
+        0.2339336250006454,
+        0.2339318330050446
       ]
     }
   }
