@@ -234,6 +234,22 @@ Silencing sets every synapse *from* a neuron to zero weight, which is what
 code. A silenced neuron still integrates, spikes and counts, and may also be
 driven.
 
+To drive chosen neurons instead of the hubs, pass their indices and a rate:
+
+```python
+from lif import stimulus_flybrain
+
+sugar = stimulus_flybrain.targets(pack.neuron_ids)   # indices of the 21 sugar GRNs
+stim_sugar = core.make_stimulus_for(pack, sugar, 150.0, n_ticks=10_000, seed=20260913)
+result = engine_fused.run(pack, stim_sugar, chunk=32, edge_split=1)
+```
+
+`targets2=` and `rate2_hz=` add a second set at another rate, as `neu_exc2` and
+`r_poi2` do in the published model. As there, no driven neuron is ever
+refractory, including those of a second set at 0 Hz: that set receives no input
+and still changes the run once one of its neurons fires. A neuron listed twice,
+or in both sets, raises.
+
 To record which neuron fired in which tick, pass `record=True`:
 
 ```python

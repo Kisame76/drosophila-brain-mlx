@@ -151,11 +151,35 @@ class Stimulus:
     spike-count mismatch can only come from the tick body.
     """
 
-    targets: np.ndarray      # int32[K], neuron indices receiving Poisson input
+    targets: np.ndarray      # int32[K], neuron indices receiving Poisson input, each once
     draws: mx.array          # bool[T, K]
     n_ticks: int
-    rate_hz: float
+    rate_hz: float           # nan when the draws are not all at one rate
     seed: int
+
+    def __post_init__(self):
+        # What every lane assumes. A neuron listed twice gets the input of both its
+        # columns in the naive, chunked and metal lanes and of the last one only in
+        # the fused lane, which maps each neuron to one column. A draw that is not
+        # bool is scaled by the first three and truncated to uint8 by the fused lane.
+        t = self.targets
+        if not (isinstance(t, np.ndarray) and t.ndim == 1
+                and np.issubdtype(t.dtype, np.integer)):
+            raise ValueError(
+                f"targets must be a 1-D numpy integer array, got {type(t).__name__} "
+                f"dtype={getattr(t, 'dtype', None)} shape={getattr(t, 'shape', None)}")
+        if (t < 0).any():
+            raise ValueError(f"targets must be neuron indices, got {t[t < 0].tolist()}")
+        values, times = np.unique(t, return_counts=True)
+        if (times > 1).any():
+            raise ValueError(f"targets listed more than once: {values[times > 1].tolist()}")
+        d = self.draws
+        if (not isinstance(d, mx.array) or d.dtype != mx.bool_
+                or tuple(d.shape) != (self.n_ticks, t.size)):
+            raise ValueError(
+                f"draws must be a bool mx.array of shape ({self.n_ticks}, {t.size}), got "
+                f"{type(d).__name__} dtype={getattr(d, 'dtype', None)} "
+                f"shape={tuple(getattr(d, 'shape', ()))}")
 
     def sha256(self) -> str:
         return hashlib.sha256(np.asarray(self.draws, dtype=np.uint8).tobytes()).hexdigest()
@@ -173,16 +197,54 @@ def make_stimulus(
     """
     order = np.lexsort((np.arange(pack.n_neurons), -pack.out_degree))
     targets = np.sort(order[:n_targets]).astype(np.int32)
+    return make_stimulus_for(pack, targets, rate_hz, n_ticks, seed)
 
-    p = rate_hz * (DT / 1000.0)  # 150 Hz * 0.1 ms = 0.015
+
+def make_stimulus_for(
+    pack: Pack, targets, rate_hz: float, n_ticks: int, seed: int,
+    targets2=(), rate2_hz: float = 0.0,
+) -> Stimulus:
+    """Poisson input on chosen neurons: targets at rate_hz, targets2 at rate2_hz.
+
+    What upstream's run_exp gives neu_exc at r_poi and neu_exc2 at r_poi2, here as
+    neuron indices. Its poi() also takes the refractory period away from every
+    neuron in either list, at any rate, 0 Hz included. initial_state does the same
+    for all targets, so a neuron of targets2 at 0 Hz receives no input and still has
+    no refractory period, which changes a run once that neuron fires.
+
+    The first set is drawn before the second from one generator, so adding a second
+    set leaves the first set's draws as they were. A neuron in both sets would get
+    two inputs upstream; this refuses it rather than guess.
+    """
+    sets = []
+    for name, idx, rate in (("targets", targets, rate_hz), ("targets2", targets2, rate2_hz)):
+        idx = np.asarray(idx)
+        if idx.size == 0:
+            idx = idx.astype(np.int32)  # np.asarray([]) is float64
+        if idx.ndim != 1 or not np.issubdtype(idx.dtype, np.integer):
+            raise ValueError(f"{name} must be a list of neuron indices, got "
+                             f"dtype={idx.dtype} shape={idx.shape}")
+        outside = idx[(idx < 0) | (idx >= pack.n_neurons)]
+        if outside.size:
+            raise ValueError(f"{name} outside 0 to {pack.n_neurons - 1}: {outside.tolist()}")
+        p = rate * (DT / 1000.0)  # 150 Hz * 0.1 ms = 0.015
+        if not 0.0 <= p <= 1.0:
+            raise ValueError(f"{name} at {rate} Hz would be drawn with probability {p} per "
+                             f"tick; the rate must be from 0 to {1000.0 / DT:g} Hz")
+        sets.append((idx.astype(np.int32), p))
+    (a, p_a), (b, p_b) = sets
+    both = np.intersect1d(a, b)
+    if both.size:
+        raise ValueError(f"neurons in both targets and targets2: {both.tolist()}")
+
     rng = np.random.default_rng(seed)
-    draws = rng.random((n_ticks, n_targets)) < p
-
+    draws = np.hstack([rng.random((n_ticks, a.size)) < p_a,
+                       rng.random((n_ticks, b.size)) < p_b])
     return Stimulus(
-        targets=targets,
+        targets=np.concatenate([a, b]),
         draws=mx.array(draws),
         n_ticks=n_ticks,
-        rate_hz=rate_hz,
+        rate_hz=rate_hz if b.size == 0 else float("nan"),
         seed=seed,
     )
 

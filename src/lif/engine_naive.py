@@ -92,8 +92,8 @@ def tick(state: dict, pack: core.Pack, signed_counts: mx.array, c: dict,
     # and is shielded the same way.
     # Gate and scatter on the ~100 driven neurons only. Materialising a full
     # zeros(N) buffer and masking it cost 20% of the tick in the sparse lane
-    # for 100 values. Targets are unique, so the scatter cannot collide and
-    # the arithmetic is unchanged.
+    # for 100 values. core.Stimulus refuses a target listed twice, so the
+    # scatter cannot collide and the arithmetic is unchanged.
     v = v.at[targets].add(
         mx.where(not_ref[targets], stim_row.astype(mx.float32) * c["w_ext"], 0.0))
 

@@ -22,9 +22,9 @@ The order below is the reason the phases are numbered the way they are.
 
 The engine runs the published Shiu et al. model at 0.29 s per biological second
 on an M4 Pro, parity-gated against Brian2, on FlyWire v630; MaleCNS v1.0 runs
-through the same four lanes. A run can drive any chosen set of neurons
-(`core.Stimulus`), silence another (`silenced=`) and record which neuron fired
-in which tick (`record=True`). What it cannot do yet is the rest of what the
+through the same four lanes. A run can drive chosen neurons at one or two rates
+(`core.make_stimulus_for`), silence others (`silenced=`) and record which neuron
+fired in which tick (`record=True`). What it cannot do yet is the rest of what the
 published model is *for*: run 30 trials and read out firing rates through
 upstream's `run_exp` and parquet format. Closing that gap is the rest of
 phase 1.
@@ -98,8 +98,11 @@ that comparison is stricter: the float64 oracle matches every Brian2 spike time
 in all four validation configurations, while the float32 lanes, whose counts
 match in three of them, put up to 38 of 24,700 spikes on a different tick
 (README, "Correctness"). Recording costs the fused lane +3.8 % to +13.7 % in run
-time, the most on the sparse sugar drive (README, "Use"). Next come the two-rate
-stimulus and `run_exp` itself.
+time, the most on the sparse sugar drive (README, "Use"). The two-rate stimulus
+(`core.make_stimulus_for`) is in as well. Upstream never makes its second input
+set refractory, at 0 Hz included, so a second set at 0 Hz changes a run as soon
+as one of its neurons fires (design doc, "Stimulus with two rates"). Next comes
+`run_exp` itself.
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 

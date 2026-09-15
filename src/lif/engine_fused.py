@@ -110,7 +110,8 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
     n_neurons = mx.array([N], dtype=mx.uint32)
     n_src = mx.array([N], dtype=mx.uint32)
 
-    # Dense neuron -> stimulus-slot map, so the kernel needs no gather logic.
+    # Dense neuron -> stimulus-slot map, so the kernel needs no gather logic. One
+    # slot per neuron, which core.Stimulus guarantees by refusing a target listed twice.
     slot = np.full(N, -1, dtype=np.int32)
     slot[np.asarray(stim.targets)] = np.arange(stim.targets.size, dtype=np.int32)
     target_slot = mx.array(slot)
