@@ -26,8 +26,8 @@ through the same four lanes. A run can drive chosen neurons at one or two rates
 (`core.make_stimulus_for`), silence others (`silenced=`) and record which neuron
 fired in which tick (`record=True`), and `lif.experiment.run_exp` runs the
 published model's experiments with upstream's arguments and parquet format, which
-upstream's `get_rate` reads unchanged. What phase 1 still lacks is the end-to-end
-measurement of 30 trials.
+upstream's `get_rate` reads unchanged. One standard experiment, 30
+trials of 1 s, takes 10.05 s end to end.
 
 ## Phase 0: MaleCNS pack (done)
 
@@ -70,7 +70,13 @@ One standard experiment is 30 trials of 1 biological second:
 | | per trial | 30 trials |
 |---|---|---|
 | Brian2 2.10.1, one core | 62.6 s | 31 min |
-| this engine, fused lane | 0.29 s | 9 s (end to end not yet measured) |
+| this engine, `run_exp`, fused lane | 0.335 s | 10.05 s |
+
+Brian2's 31 min are extrapolated from one measured trial. This engine's row is
+`run_exp` end to end, measured 2026-09-14 in High Power mode, load average 1.1
+to 1.4: 21 sugar GRNs at 150 Hz, pack already loaded, three repetitions of
+10.21, 10.05 and 10.05 s, the first including kernel compilation, each writing
+409,437 spikes.
 
 ### What you get out of it
 
@@ -104,8 +110,8 @@ set refractory, at 0 Hz included, so a second set at 0 Hz changes a run as soon
 as one of its neurons fires (design doc, "Stimulus with two rates"). `run_exp`
 and `rates` are in as well (`lif.experiment`): `rates` equals upstream's
 `get_rate` exactly on a file `run_exp` wrote, and `default_params` equals
-upstream's, evaluated with Brian2's units. What remains of phase 1 is measuring
-30 trials end to end.
+upstream's, evaluated with Brian2's units. Measured end to end,
+30 trials of the sugar drive take 10.05 s (table above).
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 

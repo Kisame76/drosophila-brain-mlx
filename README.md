@@ -281,7 +281,8 @@ quantity may replace any value, so `params['r_poi'] = 100 * Hz` works as in
 upstream's example notebook. Only `t_run`, `n_run`, `r_poi` and `r_poi2` can
 change; the model constants are compiled in. Trial `n` draws its input with
 `seed + n`, so experiments with the same seed and `neu_exc` share their input
-spike trains.
+spike trains. 30 trials of 1 s with the sugar drive take 10.05 s end to end
+(ROADMAP, "Phase 1"), against 31 min extrapolated for Brian2 on one core.
 
 What recording costs in the fused lane, measured 2026-09-14 in High Power mode,
 recording on and off interleaved in one process per pack, median of 7, load
