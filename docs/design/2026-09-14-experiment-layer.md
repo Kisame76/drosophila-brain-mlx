@@ -3,7 +3,8 @@
 Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
 spike-event recording implemented and its overhead measured ("Spike-event
 recording", tests 1 to 4 and 7); the two-rate stimulus implemented ("Stimulus
-with two rates", test 10); `run_exp` not yet.
+with two rates", test 10); `run_exp` and `rates` implemented (tests 8 and 9);
+the end-to-end measurement of 30 trials not yet.
 Implements phase 1 of [ROADMAP.md](../../ROADMAP.md).
 
 ## Goal
@@ -357,6 +358,27 @@ with columns
 (per-trial count / `t_run`, then mean and population std over `n_run`).
 `t_run` and `n_run` come from the file metadata. No pandas dependency; users
 with pandas call `.to_pandas()` or use upstream's function directly.
+
+As implemented (`src/lif/experiment.py`, `tests/test_experiment.py`), it
+differs from the above in these points:
+
+- **Units.** Upstream's example notebook sets `params['r_poi'] = 100 * Hz` and
+  passes `params['t_run']` to `get_rate`. With `t_run` in milliseconds that
+  notebook's rates would come out 1,000 times too low, and its quantity would
+  be refused. So `default_params` holds plain numbers in seconds, volts and
+  hertz, which is what `float()` gives for a Brian2 quantity, and a quantity is
+  accepted for any value, its unit checked with Brian2.
+- **Signature.** Upstream's positional order is kept, with `path_comp` and
+  `path_con` optional; only the additions are keyword-only. `edge_split`
+  defaults to 1, the value for a sparse drive.
+- **Names.** A name given to two neurons raises only when it is used.
+- **Rows** are sorted by trial, model index and time, which is upstream's order;
+  both packs list their IDs in ascending order, so it is also by ID.
+- **Metadata** is one JSON value under the key `mlx_lif_engine`, which also
+  records the three neuron lists and `edge_split`; `t_run` is `t_run_s`.
+- **Tests 8 and 9** run on the full FlyWire pack, three trials of 100 ms. `rates`
+  equals upstream's `get_rate` exactly, and the `default_params` literal of
+  upstream's `model.py`, evaluated with Brian2's units, equals `default_params`.
 
 ## Testing
 

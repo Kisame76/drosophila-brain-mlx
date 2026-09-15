@@ -264,6 +264,25 @@ The kernel lanes extract the events on the GPU, once per chunk, into a buffer of
 `cap` events (default 262,144 per chunk). A chunk that produces more raises
 `RecordOverflow` naming its ticks rather than dropping spikes.
 
+To run an experiment as the published model's `run_exp` does, with its arguments
+and its parquet file:
+
+```python
+from lif.experiment import default_params as params, rates, run_exp
+
+neu_sugar = list(stimulus_flybrain.RIGHT_SUGAR_GRN_IDS)
+path = run_exp("sugarR", neu_sugar, "results", params=params)   # 30 trials of 1 s
+table = rates(path)   # flywire_id, name, rate_hz, std_hz per neuron that fired
+```
+
+Upstream's `load_exps` and `get_rate` read the file unchanged. `params` is
+upstream's `default_params` in plain seconds, volts and hertz, and a Brian2
+quantity may replace any value, so `params['r_poi'] = 100 * Hz` works as in
+upstream's example notebook. Only `t_run`, `n_run`, `r_poi` and `r_poi2` can
+change; the model constants are compiled in. Trial `n` draws its input with
+`seed + n`, so experiments with the same seed and `neu_exc` share their input
+spike trains.
+
 What recording costs in the fused lane, measured 2026-09-14 in High Power mode,
 recording on and off interleaved in one process per pack, median of 7, load
 average 2.75 to 3.28. That load slows the fused lane (see "How much to trust
@@ -447,6 +466,7 @@ src/lif/
   compile_pack_malecns.py  MaleCNS v1.0 tables -> the same pack format
   verify_pack.py           independent audit of a written pack
   core.py                  constants, pack loader, stimulus, initial state
+  experiment.py            run_exp and rates, compatible with the published model
   stimulus_flybrain.py     flyBrain's splitmix64 sugar-GRN stimulus
   engine_naive.py          eval() per tick — the deliberately slow baseline
   engine_chunked.py        N ticks per eval, async_eval
