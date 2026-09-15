@@ -229,6 +229,10 @@ Ordered by how much each shows per unit of work.
    What it took: no new pack data. The positions are read from the annotation
    table the pack was compiled from, once its sha256 matches the manifest, and the
    film is written by an APNG encoder of numpy and zlib, so it adds no dependency.
+   `./tools/demo.sh` runs the fetch, the compile and the film as one command and
+   skips any step already done. Measured 2026-09-15, it reproduces the checked-in
+   figure byte for byte in 29 s with the data in place, where compiling the pack
+   first costs 86 s.
 
    Checked 2026-09-15 with `python -m lif.stimulus_survey`, 30 trials of each of
    eight stimuli at 100 Hz: only the film's makes the ventral nerve cord's share of

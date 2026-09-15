@@ -20,6 +20,11 @@ different dataset — one second of sweet-taste input on MaleCNS v1.0, every dot
 neuron at its soma position — and what it does and does not show is under
 [Where the activity goes](#where-the-activity-goes).
 
+`./tools/demo.sh` redraws that film from a bare checkout: it fetches the MaleCNS
+tables, compiles the pack and draws the picture, skipping whatever is already
+done. Measured 2026-09-15: **29 s** once the data is in place, while a first run
+adds **86 s** for the compile and however long ~1.1 GB takes to download.
+
 ## What this is
 
 The [published model](https://www.biorxiv.org/content/10.1101/2023.05.02.539144v1)
@@ -261,6 +266,15 @@ fetch:
 python -m lif.compile_pack_malecns # builds data/pack/male_cns_v1
 python -m lif.benchmark --quick --repeat 3 --pack data/pack/male_cns_v1 --out bench/results_malecns.json
 ```
+
+`./tools/demo.sh` runs the first two of those and then draws the activity film,
+skipping any step already done and printing what each one cost. Measured
+2026-09-15 on an M4 Pro: 2 s to check the three cached files, 0 s for the compile
+when the pack is there and 86 s when it is not, and 27 s to run 30 trials and
+encode the film — 29 s in all with the data in place. It rewrites
+`docs/figures/activity-film.png` with the same bytes the repository ships
+(sha256 `beb947e2…`), so the checked-in figure can be re-derived rather than
+trusted.
 
 Spike counts from the two packs are not comparable: different specimen,
 different laboratory, and the Shiu et al. constants were fitted to FlyWire.
@@ -643,7 +657,7 @@ src/lif/
   benchmark.py             reproduces the results tables
 tests/                     parity, determinism and Brian2 spike-time gates, benchmark and stimulus checks
 bench/results*.json        measured numbers, written by the benchmark
-tools/                     upstream fetch, reference engine build
+tools/                     upstream and MaleCNS fetch, demo.sh, reference engine build
 ```
 
 ### Things that did not work
