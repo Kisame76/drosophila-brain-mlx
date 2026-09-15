@@ -22,7 +22,9 @@ traced. The engine integrates membrane voltage through that fixed wiring.
 
 ## Does the wiring matter?
 
-![MN9's firing rate over one second of sugar input: about 67 Hz on the FlyWire v630 wiring, silent on a shuffled copy with the same degrees, while the sugar neurons fire at about 99 Hz in both](docs/figures/control-demo.svg)
+<p align="center">
+  <img src="docs/figures/control-demo.svg" alt="MN9's firing rate over one second of sugar input: about 67 Hz on the FlyWire v630 wiring, silent on a shuffled copy with the same degrees, while the sugar neurons fire at about 99 Hz in both">
+</p>
 
 The 21 right sugar-sensing neurons get Poisson input at 100 Hz, as in the
 published model's example notebook, and the top row shows MN9, the proboscis motor
