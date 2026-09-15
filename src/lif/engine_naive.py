@@ -31,6 +31,9 @@ class RunResult:
     n_ticks: int
     seconds: float             # measured wall clock, warmup excluded
     peak_bytes: int
+    # int32[E, 2] of (tick, neuron), sorted by tick, then neuron; None unless
+    # the run was given record=True
+    events: np.ndarray | None = None
 
     def counts_sha256(self) -> str:
         import hashlib
@@ -46,7 +49,8 @@ def tick(state: dict, pack: core.Pack, signed_counts: mx.array, c: dict,
     """One dt. Pure function of state -> state; no host readback, no branching.
 
     signed_counts is pack.signed_counts, with the edges of silenced sources
-    zeroed when run() was given a mask.
+    zeroed when run() was given a mask. The returned state also carries this
+    tick's spike mask as "spike", which run() reads when recording.
     """
     v, g, rfc, ring = state["v"], state["g"], state["rfc"], state["ring"]
 
@@ -103,11 +107,12 @@ def tick(state: dict, pack: core.Pack, signed_counts: mx.array, c: dict,
         "v": v, "g": g, "rfc": rfc, "ring": ring,
         "rfc_reload": state["rfc_reload"],
         "counts": state["counts"] + spike.astype(mx.int32),
+        "spike": spike,
     }
 
 
 def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
-        warmup: int = 50) -> RunResult:
+        warmup: int = 50, record: bool = False) -> RunResult:
     # Silencing as data: every edge of a silenced source carries a zero count,
     # computed once per run. The kernel lanes implement the same semantics as an
     # early exit instead; that the two mechanisms agree is what the silencing
@@ -133,6 +138,7 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
     state = core.initial_state(pack, stim)
     mx.eval(*state.values())
 
+    events = [] if record else None
     mx.reset_peak_memory()
     start = time.perf_counter()
     for t in range(n):
@@ -140,6 +146,14 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         # The defining property of this lane: a full host synchronisation here,
         # every single tick.
         mx.eval(state["v"], state["g"], state["rfc"], state["ring"], state["counts"])
+        if record:
+            # On the host, per tick, on purpose: the kernel lanes extract events
+            # on the device (lif.spike_record), and this is what they are
+            # checked against. The mask was computed by the eval above.
+            fired = np.flatnonzero(np.asarray(state["spike"])).astype(np.int32)
+            events.append(np.column_stack([np.full(fired.size, t, dtype=np.int32), fired]))
+    if record:
+        events = np.concatenate(events) if events else np.zeros((0, 2), dtype=np.int32)
     elapsed = time.perf_counter() - start
 
     return RunResult(
@@ -149,4 +163,5 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         n_ticks=n,
         seconds=elapsed,
         peak_bytes=mx.get_peak_memory(),
+        events=events,
     )

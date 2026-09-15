@@ -232,6 +232,21 @@ Silencing sets every synapse *from* a neuron to zero weight, which is what
 code. A silenced neuron still integrates, spikes and counts, and may also be
 driven.
 
+To record which neuron fired in which tick, pass `record=True`:
+
+```python
+from lif import spike_record
+
+result = engine_fused.run(pack, stim, chunk=32, edge_split=8, record=True)
+tick, neuron = result.events[:, 0], result.events[:, 1]   # int32, sorted by tick
+seconds = spike_record.tick_to_seconds(tick)              # tick k is k * 0.1 ms
+```
+
+The kernel lanes extract the events on the GPU, once per chunk, into a buffer of
+`cap` events (default 262,144 per chunk). A chunk that produces more raises
+`RecordOverflow` naming its ticks rather than dropping spikes. What recording
+costs in run time is not measured yet.
+
 Measured with 10 silenced neurons that never fire, against the same run without
 a mask, the fused lane moved −1.16 % on FlyWire with the sugar drive and +0.01 %
 on MaleCNS with the hub drive. The mask empties those neurons' edge ranges for
@@ -248,7 +263,9 @@ counts from the same stimulus and seed, compared by SHA-256 over the full
 127,400-element vector. They do, and final `v`/`g` match bitwise. The same holds
 with a silencing mask, which the kernel lanes implement as empty edge ranges and
 the dense lanes as zeroed edge counts, so that gate compares two unrelated
-mechanisms.
+mechanisms. With recording on, the sorted spike events are identical too, and
+there the naive lane's `np.nonzero` on the host checks the kernel lanes' event
+extraction on the GPU.
 
 **Against Brian2.** `src/lif/validate_brian2.py` runs Brian2 2.10.1 and this
 engine on a connected 800-neuron subnetwork with a fixed spike train, so no RNG
@@ -257,16 +274,25 @@ NumPy oracle with the same tick semantics — necessary because Metal has no
 float64, so without it "wrong semantics" cannot be told apart from "float32
 rounding".
 
-| Configuration | Brian2 | ref64 (f64) | MLX (f32) |
-|---|---|---|---|
-| 4 seeds @ 150 Hz, 500 ticks | 38 | 38 ✅ | 38 ✅ |
-| 20 seeds @ 400 Hz, 2,000 ticks | 2,973 | 2,973 ✅ | 2,974 |
-| 40 seeds @ 800 Hz, 2,000 ticks | 9,035 | 9,035 ✅ | 9,035 ✅ |
-| 60 seeds @ 1,200 Hz, 3,000 ticks | 24,700 | 24,700 ✅ | 24,700 ✅ |
+| Configuration | Brian2 spikes | ref64 (f64) counts | ref64 spike times | MLX (f32) counts | MLX spike times |
+|---|---|---|---|---|---|
+| 4 seeds @ 150 Hz, 500 ticks | 38 | 38 ✅ | identical ✅ | 38 ✅ | identical ✅ |
+| 20 seeds @ 400 Hz, 2,000 ticks | 2,973 | 2,973 ✅ | identical ✅ | 2,974 | 23 missing, 24 extra |
+| 40 seeds @ 800 Hz, 2,000 ticks | 9,035 | 9,035 ✅ | identical ✅ | 9,035 ✅ | 28 missing, 28 extra |
+| 60 seeds @ 1,200 Hz, 3,000 ticks | 24,700 | 24,700 ✅ | identical ✅ | 24,700 ✅ | 38 missing, 38 extra |
 
-The float64 oracle matches Brian2 exactly in every configuration. The float32
-lane differs by one spike in 2,973 in one case — a neuron sitting exactly on the
-threshold, unavoidable without float64 on the GPU.
+The float64 oracle matches Brian2 exactly in every configuration, spike by spike:
+every `(neuron, time)` pair Brian2's `SpikeMonitor` records, with engine tick `k`
+at time `k * dt` and no offset. The float32 lane matches the per-neuron counts in
+three configurations and differs by one spike in 2,973 in the fourth, but its
+spike times differ in all but the shortest: a spike moved to another tick counts
+the same. The first difference comes after 18 to 35 ms of simulated time, and
+most moved spikes fire one tick early. All four MLX lanes record identical
+events, so this is float32 rounding at the strict threshold, unavoidable
+without float64 on the GPU. Measured 2026-09-14, one row per run of
+`python -m lif.validate_brian2 <ticks> <seeds> <rate_hz>`, which exits non-zero
+if ref64 differs from Brian2 at all or if the fused lane leaves out or adds more
+than 5 % of Brian2's spikes.
 
 ## How it works
 
@@ -389,10 +415,11 @@ src/lif/
   engine_metal.py          sparse CSR propagation via mx.fast.metal_kernel
   engine_fused.py          whole tick in two Metal dispatches — the fast lane
   engine_ref64.py          float64 correctness oracle, not a performance lane
+  spike_record.py          spike events (tick, neuron), one Metal kernel per chunk
   subnet.py                connected subnetwork for Brian2 validation
-  validate_brian2.py       Brian2 vs ref64 vs MLX
+  validate_brian2.py       Brian2 vs ref64 vs MLX, spike counts and spike times
   benchmark.py             reproduces the results tables
-tests/                     parity and determinism gates, benchmark and stimulus checks
+tests/                     parity, determinism and Brian2 spike-time gates, benchmark and stimulus checks
 bench/results*.json        measured numbers, written by the benchmark
 tools/                     upstream fetch, reference engine build
 ```

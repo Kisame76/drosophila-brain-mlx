@@ -16,8 +16,11 @@ from lif import core
 
 
 def run(sub_row_ptr, destinations, signed_counts, n, targets, draws, n_ticks,
-        rfc_reload=None):
+        rfc_reload=None, record=False):
+    """Returns counts, v, g and the spike events: int32 [E, 2] of (tick, neuron),
+    sorted by tick, then neuron, or None unless record."""
     A, B, C, V0T = core.DECAY_V, core.DECAY_G, core.COUPLE_G, core.V0_TERM
+    events = [] if record else None
 
     edge_src = np.repeat(np.arange(n), np.diff(sub_row_ptr))
     dst = np.asarray(destinations, dtype=np.int64)
@@ -64,5 +67,10 @@ def run(sub_row_ptr, destinations, signed_counts, n, targets, draws, n_ticks,
         rfc = np.where(spike, rfc_reload, rfc)
         ring[slot] = spike
         counts += spike
+        if record:
+            fired = np.flatnonzero(spike).astype(np.int32)
+            events.append(np.column_stack([np.full(fired.size, t, dtype=np.int32), fired]))
 
-    return counts, v, g
+    if record:
+        events = np.concatenate(events) if events else np.zeros((0, 2), dtype=np.int32)
+    return counts, v, g, events

@@ -23,7 +23,7 @@ import time
 import mlx.core as mx
 import numpy as np
 
-from lif import core
+from lif import core, spike_record
 from lif.engine_naive import RunResult
 
 
@@ -69,7 +69,7 @@ def make_step(pack: core.Pack, signed_counts: mx.array, c: dict, targets: mx.arr
 
 def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
         chunk: int = 256, compile_body: bool = False, use_async: bool = True,
-        warmup: int = 50) -> RunResult:
+        warmup: int = 50, record: bool = False, cap: int = spike_record.CAP) -> RunResult:
     """Run the chunked lane.
 
     compile_body defaults to False because mx.compile BREAKS the parity gate.
@@ -80,6 +80,9 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
     vs 52472 spikes at 10k ticks. MLX exposes no way to forbid the contraction.
     It bought 4%; it is not worth an invalid result. Kept as an opt-in flag so
     the effect stays reproducible.
+
+    record=True also returns the spike events, extracted on the device once per
+    chunk (lif.spike_record); cap is the most events one chunk may produce.
     """
     # Edges of silenced sources carry a zero count, once per run; see
     # engine_naive.run.
@@ -104,39 +107,51 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         ring = [mx.zeros((N,), dtype=mx.bool_) for _ in range(core.DELAY_TICKS)]
         return st, ring
 
-    def encode(st, ring, t0, k):
+    def encode(st, ring, t0, k, spikes=None):
         v, g, rfc, counts = st["v"], st["g"], st["rfc"], st["counts"]
         rl = st["rfc_reload"]
         for t in range(t0, t0 + k):
             s = t % core.DELAY_TICKS
             v, g, rfc, counts, spike = step(v, g, rfc, counts, rl, ring[s], stim.draws[t])
             ring[s] = spike  # read-then-overwrite: same slot, DELAY_TICKS apart
+            if spikes is not None:
+                spikes.append(spike)
         st = {"v": v, "g": g, "rfc": rfc, "counts": counts, "rfc_reload": rl}
         return st, ring
 
     # Warm up outside the measured window: kernel compilation, the mx.compile
     # trace, and first-touch allocation all happen here and are then discarded.
+    # With recording on, the event kernel compiles here too; its events are
+    # never read.
     w = min(warmup, n)
     if w:
         st, ring = fresh()
-        st, ring = encode(st, ring, 0, w)
-        mx.eval(*st.values(), *ring)
+        spikes = [] if record else None
+        st, ring = encode(st, ring, 0, w, spikes)
+        out = spike_record.Recorder(N, cap).submit(spikes, 0) if record else []
+        mx.eval(*st.values(), *ring, *out)
 
     state, ring = fresh()
     mx.eval(*state.values(), *ring)
+    rec = spike_record.Recorder(N, cap) if record else None
 
     mx.reset_peak_memory()
     start = time.perf_counter()
     t = 0
     while t < n:
         k = min(chunk, n - t)
-        state, ring = encode(state, ring, t, k)
+        spikes = [] if rec is not None else None
+        state, ring = encode(state, ring, t, k, spikes)
+        out = rec.submit(spikes, t) if rec is not None else []
         if use_async:
-            mx.async_eval(*state.values(), *ring)
+            mx.async_eval(*state.values(), *ring, *out)
         else:
-            mx.eval(*state.values(), *ring)
+            mx.eval(*state.values(), *ring, *out)
+        if rec is not None:
+            rec.drain(keep=1)  # the previous chunk; see spike_record.Recorder
         t += k
     mx.eval(*state.values(), *ring)
+    events = rec.events() if rec is not None else None
     elapsed = time.perf_counter() - start
 
     return RunResult(
@@ -146,4 +161,5 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         n_ticks=n,
         seconds=elapsed,
         peak_bytes=mx.get_peak_memory(),
+        events=events,
     )

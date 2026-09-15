@@ -23,10 +23,11 @@ The order below is the reason the phases are numbered the way they are.
 The engine runs the published Shiu et al. model at 0.29 s per biological second
 on an M4 Pro, parity-gated against Brian2, on FlyWire v630; MaleCNS v1.0 runs
 through the same four lanes. A run can drive any chosen set of neurons
-(`core.Stimulus`) and silence another (`silenced=`). What it cannot do yet is
-the rest of what the published model is *for*: record which neuron fired when,
-run 30 trials and read out firing rates through upstream's `run_exp` and parquet
-format. Closing that gap is the rest of phase 1.
+(`core.Stimulus`), silence another (`silenced=`) and record which neuron fired
+in which tick (`record=True`). What it cannot do yet is the rest of what the
+published model is *for*: run 30 trials and read out firing rates through
+upstream's `run_exp` and parquet format. Closing that gap is the rest of
+phase 1.
 
 ## Phase 0: MaleCNS pack (done)
 
@@ -90,11 +91,14 @@ One standard experiment is 30 trials of 1 biological second:
 
 ### What it costs to build
 
-Two engine additions, both parity-gated across all four lanes: **silencing**,
-which is in, and **spike-event recording** (which neuron fired in which tick),
-which is next. Recording also lets the Brian2 validation compare spike *times*,
-not only counts, which makes the correctness gate stronger than it is today.
-After it come the two-rate stimulus and `run_exp` itself.
+Two engine additions, both parity-gated across all four lanes and both in:
+**silencing**, and **spike-event recording** (which neuron fired in which tick).
+Recording let the Brian2 validation compare spike *times*, not only counts, and
+that comparison is stricter: the float64 oracle matches every Brian2 spike time
+in all four validation configurations, while the float32 lanes, whose counts
+match in three of them, put up to 38 of 24,700 spikes on a different tick
+(README, "Correctness"). What recording costs in run time is not measured yet.
+Next come the two-rate stimulus and `run_exp` itself.
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 
