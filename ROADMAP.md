@@ -164,11 +164,14 @@ Ordered by how much each shows per unit of work.
    be re-derived rather than trusted. A 3D body scene like flyBrain's can follow
    later, labelled with what in it is measured and what is engineered.
 
-   Now that the plot is in the README: add the repository to
-   [awesome-fly](https://github.com/cobanov/awesome-fly) under Brain Models, and
-   post a case study of [docs/mlx-notes.md](docs/mlx-notes.md) in the GitHub
-   Discussions of ml-explore/mlx. Both say what the repository is, what is
-   measured and where its limits are, with no comparative claims. Independent of
+   With the plot in the README, on 2026-09-15 the repository was proposed for
+   [awesome-fly](https://github.com/cobanov/awesome-fly) under Brain Models in
+   [cobanov/awesome-fly#5](https://github.com/cobanov/awesome-fly/pull/5), and a
+   case study of [docs/mlx-notes.md](docs/mlx-notes.md) was posted in the GitHub
+   Discussions of ml-explore/mlx as
+   [ml-explore/mlx#4512](https://github.com/ml-explore/mlx/discussions/4512). Both
+   say what the repository is, what is measured and where its limits are, with no
+   comparative claims. Independent of
    the demo, reported as
    [philshiu/Drosophila_brain_model#10](https://github.com/philshiu/Drosophila_brain_model/issues/10):
    its README says silencing removes synapses "to and from" a neuron while
