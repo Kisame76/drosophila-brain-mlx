@@ -466,6 +466,7 @@ src/lif/
   compile_pack.py          FlyWire CSV/parquet -> source-major CSR pack, 40 checks
   compile_pack_malecns.py  MaleCNS v1.0 tables -> the same pack format
   verify_pack.py           independent audit of a written pack
+  shuffle_pack.py          a pack with random wiring and the same degrees, as a control
   core.py                  constants, pack loader, stimulus, initial state
   experiment.py            run_exp and rates, compatible with the published model
   stimulus_flybrain.py     flyBrain's splitmix64 sugar-GRN stimulus
