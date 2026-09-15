@@ -1,4 +1,4 @@
-# mlx-lif-engine
+# drosophila-brain-mlx
 
 A leaky integrate-and-fire simulation of the *Drosophila* connectome, written in
 Apple MLX and accelerated with a custom Metal kernel. It runs the published
