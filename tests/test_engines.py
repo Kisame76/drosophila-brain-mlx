@@ -307,6 +307,48 @@ def test_a_cap_equal_to_the_fullest_chunk_does_not_raise(pack, stim, recorded):
     assert np.array_equal(got.events, recorded["fused"].events)
 
 
+# ---------------------------------------------------------------- two rates
+def _second_set(pack, stim, base, firing):
+    """The 10 highest out-degree neurons that are not driven and that fire, or never
+    fire, in the run without a second set."""
+    candidates = np.setdiff1d(np.arange(pack.n_neurons), stim.targets)
+    fired = base.spike_counts[candidates] > 0
+    return _top_out_degree(pack, candidates[fired if firing else ~fired])
+
+
+def _two_rates(pack, stim, targets2, rate2_hz):
+    """The shared hub drive as the first set, as run_exp will draw it."""
+    return core.make_stimulus_for(pack, stim.targets, stim.rate_hz, TICKS, SEED,
+                                  targets2=targets2, rate2_hz=rate2_hz)
+
+
+def test_a_second_set_at_zero_hz_that_never_fires_changes_nothing(pack, stim, plain_naive):
+    """Bit for bit, but only because these neurons never fire; see the next test."""
+    silent = _second_set(pack, stim, plain_naive, firing=False)
+    got = run_lane("fused", pack, _two_rates(pack, stim, silent, 0.0))
+    assert got.counts_sha256() == plain_naive.counts_sha256()
+    assert np.array_equal(got.v_final, plain_naive.v_final)
+    assert np.array_equal(got.g_final, plain_naive.g_final)
+
+
+def test_a_second_set_at_zero_hz_that_fires_changes_the_run(pack, stim, plain_naive):
+    """Upstream's poi() takes the refractory period away from every neuron of
+    neu_exc2, at 0 Hz too, so one that fires may fire again sooner. That neu_exc2 at
+    r_poi2 = 0 reproduces the run without it holds only for neurons that never fire."""
+    firing = _second_set(pack, stim, plain_naive, firing=True)
+    got = run_lane("fused", pack, _two_rates(pack, stim, firing, 0.0))
+    assert got.spike_counts[firing].sum() != plain_naive.spike_counts[firing].sum()
+
+
+def test_a_second_set_at_a_positive_rate_fires(pack, stim, plain_naive):
+    silent = _second_set(pack, stim, plain_naive, firing=False)
+    two = _two_rates(pack, stim, silent, 150.0)
+    assert (np.asarray(two.draws)[:, stim.targets.size:].sum(axis=0) > 0).all(), \
+        "every neuron of the set must receive input"
+    got = run_lane("fused", pack, two)
+    assert (got.spike_counts[silent] > 0).all()
+
+
 # ---------------------------------------------------------------- kernel
 def test_metal_kernel_is_deterministic(pack):
     """int32 atomics must be order-independent, or the parity gate is luck."""

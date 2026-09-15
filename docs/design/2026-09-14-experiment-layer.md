@@ -2,7 +2,8 @@
 
 Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
 spike-event recording implemented and its overhead measured ("Spike-event
-recording", tests 1 to 4 and 7); the two-rate stimulus and `run_exp` not yet.
+recording", tests 1 to 4 and 7); the two-rate stimulus implemented ("Stimulus
+with two rates", test 10); `run_exp` not yet.
 Implements phase 1 of [ROADMAP.md](../../ROADMAP.md).
 
 ## Goal
@@ -259,14 +260,44 @@ single arm spread by up to 23 %.
 
 ## Stimulus with two rates
 
-`core.make_stimulus_for(pack, targets_a, rate_a_hz, targets_b, rate_b_hz,
-n_ticks, seed)` returns a `Stimulus` whose `draws[T, Ka + Kb]` use
-`p = rate * dt / 1000` per column. `numpy.random.default_rng(seed)` as today.
-A neuron listed in both sets is an error (upstream would give it two inputs;
-this design refuses rather than guess).
+`core.make_stimulus_for(pack, targets, rate_hz, n_ticks, seed, targets2=(),
+rate2_hz=0.0)` returns a `Stimulus` whose `draws[T, K1 + K2]` use
+`p = rate * dt / 1000` per column, from `numpy.random.default_rng(seed)` as
+before. As implemented, the second set is keyword-only with upstream's defaults
+(`neu_exc2=[]`, `r_poi2 = 0 Hz`); the first set is drawn before the second, so
+adding a second set leaves the first set's draws bit for bit as they were; and
+`make_stimulus` calls it, so one function draws. A neuron listed in both sets is
+an error (upstream would give it two inputs; this design refuses rather than
+guess), and so are an index outside the pack and a rate whose probability per
+tick is not from 0 to 1; a negative or NaN rate would otherwise draw no input,
+without an error.
 
-Trial `n` uses `seed = base_seed + n`. `rfc_reload = 0` for every driven neuron,
-as `initial_state` already does.
+`rfc_reload = 0` for every driven neuron, as `initial_state` already does. That
+includes a second set at 0 Hz: upstream's `poi()` sets `rfc = 0 ms` on every
+neuron of `neu_exc2`, whatever `r_poi2` is. Such a neuron receives no input and
+is never refractory, so this design's first expectation, that `neu_exc2` at
+`r_poi2 = 0` reproduces the single-set run bit for bit, holds only for neurons
+that never fire. Measured 2026-09-14 in the configuration of
+`tests/test_engines.py` (FlyWire, hub drive, 400 ticks, fused lane), each set
+added at 0 Hz:
+
+| second set | its spikes | all spikes |
+|---|---|---|
+| none | | 1,400 |
+| the 10 highest out-degree neurons that never fire | 0 → 0 | 1,400, bit-identical |
+| the 10 highest out-degree neurons that fire | 27 → 34 | 1,397 |
+| the 10 that fire most often | 55 → 74 | 1,418 |
+| all 462 non-driven neurons that fire | 749 → 831 | 1,512 |
+
+`Stimulus` now also checks what the lanes assume of any drive, however it was
+built: every target once, no negative or non-integer target, and draws a bool
+`mx.array` of shape `(n_ticks, K)`. A target listed twice broke lane parity
+without an error: the fused lane maps each neuron to one draw column and keeps
+the last, the other three add every column. With one neuron listed twice and a
+single draw in its first column, it fired in the naive, chunked and metal lanes
+and not in the fused lane.
+
+Trial `n` uses `seed = base_seed + n`.
 
 ## `run_exp`
 
@@ -392,8 +423,15 @@ the full pack.
 9. **`**config` compatibility.** `run_exp(exp_name, neu_exc, **config)` with
    upstream's exact `config` dict shape (including `n_proc`) runs; a
    `path_comp` with a wrong hash raises.
-10. **Two rates.** `neu_exc2` at `r_poi2 = 0` reproduces the single-set
-    result bit for bit; at `r_poi2 > 0` the second set's neurons fire.
+10. **Two rates.** Written as `neu_exc2` at `r_poi2 = 0` reproducing the
+    single-set result bit for bit, which holds only for neurons that never fire
+    ("Stimulus with two rates"). Implemented on `make_stimulus_for`, as `run_exp`
+    does not exist yet, on the full pack with the hub drive as the first set: a
+    second set at 0 Hz of the 10 highest out-degree neurons that never fire
+    leaves counts, `v` and `g` bit-identical; one of the 10 highest that do fire
+    changes their spike count; at 150 Hz the second set's neurons fire. Without a
+    pack, `tests/test_stimulus.py` checks that the first set's draws do not
+    depend on the second, that neither set is refractory, and each refusal.
 
 ## Measurements to add to the README
 
