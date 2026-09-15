@@ -155,6 +155,15 @@ Ordered by how much each shows per unit of work.
    regenerates it, so it can be re-derived rather than trusted. A 3D body scene
    like flyBrain's can follow later, labelled with what in it is measured and
    what is engineered.
+
+   Once the plot is in the README, and not before: add the repository to
+   [awesome-fly](https://github.com/cobanov/awesome-fly) under Brain Models, and
+   post a case study of [docs/mlx-notes.md](docs/mlx-notes.md) in the GitHub
+   Discussions of ml-explore/mlx. Both say what the repository is, what is
+   measured and where its limits are, with no comparative claims. Independent of
+   the demo: report on philshiu/Drosophila_brain_model that its README says
+   silencing removes synapses "to and from" a neuron while model.py removes only
+   the outgoing ones.
 2. **Whole-brain activity film.** Needs 3D neuron coordinates, which neither
    pack carries today; the MaleCNS annotation table has `somaLocation` and that
    is the first thing to check. Deferred until a coordinate source exists, and
