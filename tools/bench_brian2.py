@@ -35,6 +35,7 @@ from ./tools/fetch_upstream.sh.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import resource
 import sys
 import time
@@ -47,6 +48,26 @@ ROOT = Path(__file__).resolve().parents[1]
 def peak_mb() -> float:
     """Peak resident size of this process in MB; ru_maxrss is bytes on macOS."""
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
+
+
+def stub_joblib() -> bool:
+    """Stand in for joblib unless a real one is there, and say whether it did.
+
+    Upstream's model.py imports joblib at module level for the parallel driver
+    inside its own run_exp. Nothing used here -- create_model, poi,
+    default_params -- touches it, so a stand-in keeps upstream's file unmodified
+    and spares a timing run a dependency it never calls. An installed joblib wins:
+    testing sys.modules alone would shadow one that simply had not been imported
+    yet.
+    """
+    if "joblib" in sys.modules:
+        return False
+    if importlib.util.find_spec("joblib") is not None:
+        return False
+    stub = types.ModuleType("joblib")
+    stub.Parallel = stub.delayed = stub.parallel_backend = None
+    sys.modules["joblib"] = stub
+    return True
 
 
 def main() -> int:
@@ -80,15 +101,7 @@ def main() -> int:
     if args.target != "auto":
         prefs.codegen.target = args.target
 
-    # Upstream's model.py imports joblib at module level, for the parallel driver
-    # inside its own run_exp. Nothing used here -- create_model, poi,
-    # default_params -- touches it, so a stub keeps upstream's file unmodified and
-    # spares a timing run a dependency it never calls. If joblib is installed,
-    # the real one is used.
-    if "joblib" not in sys.modules:
-        stub = types.ModuleType("joblib")
-        stub.Parallel = stub.delayed = stub.parallel_backend = None
-        sys.modules["joblib"] = stub
+    stub_joblib()
 
     import model  # upstream's, unchanged
 
