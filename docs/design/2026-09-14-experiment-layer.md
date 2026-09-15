@@ -1,8 +1,9 @@
 # Experiment layer: `run_exp` compatible with the published model
 
 Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
-spike-event recording, the two-rate stimulus and `run_exp` not yet. Implements
-phase 1 of [ROADMAP.md](../../ROADMAP.md).
+spike-event recording implemented ("Spike-event recording", tests 1 to 4 and 7),
+its overhead not yet measured; the two-rate stimulus and `run_exp` not yet.
+Implements phase 1 of [ROADMAP.md](../../ROADMAP.md).
 
 ## Goal
 
@@ -44,8 +45,9 @@ with the upstream analysis functions consuming it unchanged.
 ```
 src/lif/experiment.py     run_exp(), default_params, rates(); resolves IDs, builds
                           the stimulus, loops trials, writes parquet
-src/lif/spike_record.py   one Metal kernel: [K, N] uint8 spike stack -> (tick, neuron)
-                          event pairs; host-side sort and overflow check
+src/lif/spike_record.py   one Metal kernel: [K, N] spike stack -> (tick, neuron)
+                          event pairs; host-side sort and overflow check;
+                          tick_to_seconds
 engines (all four)        run(pack, stim, silenced=None, record=False)
 core.py                   make_stimulus_for(): two target sets, two rates
 engine_ref64.py           record=True support (numpy), for the Brian2 time test
@@ -60,67 +62,81 @@ a pack edit.
 
 An event is `(tick, neuron)`, both `int32`. `tick` is the 0-based index of the
 tick in which `v > v_th` was true. Conversion to seconds happens in
-`experiment.py` only:
+`spike_record.tick_to_seconds` only, which `experiment.py` will use:
 
 ```python
 def tick_to_seconds(tick: np.ndarray) -> np.ndarray:
-    return tick.astype(np.float64) * (core.DT / 1000.0)
+    return np.asarray(tick).astype(np.float64) * (core.DT / 1000.0)
 ```
 
-Expected correspondence to Brian2: engine tick `k` performs the same state
-update, threshold and reset sequence that Brian2 performs at clock time
-`k * dt`, and `SpikeMonitor` records the threshold time. So `t = k * dt` with no
-offset. This is an expectation, not a fact; the `StateMonitor` mistake recorded
-in the README is why. The Brian2 validation (below) asserts it, and if it fails
-the offset lives in this one function.
+Correspondence to Brian2: engine tick `k` performs the same state update,
+threshold and reset sequence that Brian2 performs at clock time `k * dt`, and
+`SpikeMonitor` records the threshold time. So `t = k * dt` with no offset. This
+was written as an expectation, because of the `StateMonitor` mistake recorded in
+the README; test 7 has since confirmed it, and if it ever fails the offset lives
+in this one function.
 
 ### Kernel
 
-Runs **once per chunk**, not per tick. The fused lane already produces one
-`uint8[N]` spike array per tick and keeps the chunk's arrays alive until
-`async_eval`; the kernel consumes that stack.
+Runs **once per chunk**, not per tick. Every kernel lane already produces one
+spike mask per tick (`bool[N]` in the chunked and sparse lanes, `uint8[N]` in
+the fused lane) and keeps the chunk's masks alive until `async_eval`; the lane
+stacks them and the kernel consumes the stack.
 
 ```
-inputs   spikes[K, N] uint8, t0 uint32, cap uint32
-outputs  ev_tick[cap] int32, ev_neuron[cap] int32, count[1] uint32 (atomic)
-grid     (K * N, 1, 1)
+inputs   spikes[K, N] bool or uint8, cap[1] uint32
+outputs  events[cap, 2] int32, count[1] uint32, both atomic, zero-initialised
+grid     (N, K, 1)
 
-uint gid = thread_position_in_grid.x;
-uint k = gid / N, i = gid % N;
-if (k >= K || i >= N) return;
-if (!spikes[k * N + i]) return;
+uint i = thread_position_in_grid.x;
+uint k = thread_position_in_grid.y;
+uint n_ticks = uint(spikes_shape[0]);
+uint n = uint(spikes_shape[1]);
+if (i >= n || k >= n_ticks) return;
+if (!spikes[k * n + i]) return;
 uint slot = atomic_fetch_add_explicit(&count[0], 1u, memory_order_relaxed);
-if (slot >= cap) return;                      // overflow: detected on the host
-atomic_store_explicit(&ev_tick[slot], int(t0 + k), memory_order_relaxed);
-atomic_store_explicit(&ev_neuron[slot], int(i), memory_order_relaxed);
+if (slot >= cap[0]) return;                      // overflow: detected on the host
+atomic_store_explicit(&events[2 * slot], int(k), memory_order_relaxed);
+atomic_store_explicit(&events[2 * slot + 1], int(i), memory_order_relaxed);
 ```
 
-`atomic_outputs=True` makes every output atomic in `mx.fast.metal_kernel`, hence
-`atomic_store_explicit` for the two arrays (same pattern `engine_metal.py`
-already uses). `#pragma clang fp contract(off)` is irrelevant here; there is no
-float arithmetic.
+As implemented, three things differ from the first sketch here: the tick is
+written relative to the chunk and the host adds the chunk's first tick, so no
+per-chunk input array is built; tick and neuron share one output, so one buffer
+is allocated and zero-filled instead of two; and `K` and `N` come from the
+stack's shape rather than from inputs. `atomic_outputs=True` makes every output
+atomic in `mx.fast.metal_kernel`, hence `atomic_store_explicit` (same pattern
+`engine_metal.py` already uses). `#pragma clang fp contract(off)` is irrelevant
+here; there is no float arithmetic.
 
-Cost: one extra dispatch per chunk of 32 ticks, and one extra read of the
-`K * N` spike bytes that already exist, i.e. 4 MiB per chunk or 0.125 MiB per
-tick. Against the fused tick's ~0.0295 ms and this machine's ~114 GiB/s that is
-on the order of 1 ms per 1,000 ticks, so single-digit percent rather than the
-28 % first estimated here (that estimate came from a per-dispatch cost model
-that measurement later disproved; see docs/mlx-notes.md §3). Measured after
-implementation; the number goes into the README next to the fused-lane row as
-`record=True` overhead.
+Cost per chunk: stacking copies the chunk's `K * N` spike bytes, the dispatch
+reads them, the event buffer is zero-filled, and the host reads back `count` and
+the events used. The estimate that stood here counted only the read, and put it
+at single-digit percent, down from a first 28 % that came from a per-dispatch
+cost model measurement later disproved (docs/mlx-notes.md §3). The copy and the
+fill were not in it, so the overhead is measured rather than estimated; the
+number goes into the README next to the fused-lane row as `record=True`
+overhead.
 
 ### Host side
 
-Per chunk: read `count`; if `count > cap`, raise `RecordOverflow(tick_range,
-count, cap)` with the advice to raise `cap`. Otherwise slice `[:count]`,
-append. At the end of the run, `np.lexsort((neuron, tick))`. The atomic slot
-order is nondeterministic; the sorted event set is not, and a test asserts it.
+Reading a chunk's `count` waits for that chunk, so reading it right after
+`async_eval` would turn the pipeline into a sync per chunk. The lanes instead
+read back the chunk *before* the one just scheduled (`Recorder.drain(keep=1)`),
+and the last one after the loop, so the host never waits on the chunk it has
+just handed over, and at most two chunks' event buffers are alive at a time.
+For each chunk read: if `count > cap`, raise `RecordOverflow(tick_range, count,
+cap)`, which names the chunk's ticks and advises a larger `cap`; otherwise copy
+`events[:count]` and add the chunk's first tick. At the end of the run,
+`np.lexsort((neuron, tick))`. The atomic slot order is nondeterministic; the
+sorted event set is not, and a test asserts it.
 
 Default `cap = 262,144` events per chunk (2 MB), regardless of the lane's
 chunk length. The densest run measured so far, 100 hub neurons at 150 Hz,
 produced ~52,000 spikes per 10,000 ticks, i.e. ~166 per 32-tick chunk on
 average; the cap is ~1,500x that. Burst peaks are not measured; the overflow
-check exists for them.
+check exists for them. Warmup runs the kernel as well, so it compiles outside
+the measured window; the warmup's events are never read.
 
 ### Other lanes
 
@@ -311,7 +327,10 @@ All parity tests run on the 800-neuron validation subnetwork plus, where cheap,
 the full pack.
 
 1. **Event parity across lanes.** Same stim, `record=True`: the sorted event
-   arrays of naive, chunked, metal and fused are identical.
+   arrays of naive, chunked, metal and fused are identical. Implemented on the
+   full pack with 400 ticks of the 100-hub drive in chunks of 32, so 13 chunks
+   with a short last one; recording must also leave counts, `v` and `g`
+   unchanged.
 2. **Counts agree with events.** `np.bincount(events[:,1], minlength=N) ==
    spike_counts` for every lane.
 3. **Determinism.** Three fused runs with recording yield identical sorted
@@ -337,10 +356,29 @@ the full pack.
    that is not a bool array of shape `(N,)` raises in every lane.
 7. **Brian2 spike times.** `validate_brian2.py` extended: for each
    configuration in the existing table, the set of `(neuron, time)` from
-   Brian2's `SpikeMonitor` equals ref64's event set converted with
-   `tick_to_seconds`, exactly; and equals the fused lane's except for the
-   already-documented single borderline spike. Runs only when Brian2 is
-   installed, as today.
+   Brian2's `SpikeMonitor` against ref64's event set converted with
+   `tick_to_seconds`, and against the fused lane's. Runs only when Brian2 is
+   installed, as today. `tests/test_brian2.py` asserts ref64 exactly in all
+   four configurations; the fused lane within 5 % of Brian2's spikes left out
+   and added in all four; and the fused lane exactly in the shortest
+   configuration and in the first 350 ticks of the densest, where 549 of 2,795
+   spikes are fired by neurons that are not driven. The shortest configuration
+   alone would not do: all its spikes are driven neurons', one tick after each
+   input, so an MLX-only change of the axonal delay passed it, and fails the
+   350-tick prefix (620 spikes left out, 634 added).
+
+   Measured 2026-09-14: ref64 equals Brian2 exactly in all four, every spike
+   time on the tick grid, so there is no offset. This design expected the fused
+   lane to differ only by the borderline spike its counts already showed. It
+   differs more: in the four configurations 0, 23, 28 and 38 of Brian2's spikes
+   are missing from its events and 0, 24, 28 and 38 other spikes are in them,
+   in 13, 21 and 20 neurons, the first difference at 19.6, 18.1 and 35.1 ms.
+   Pairing each neuron's missing and extra spikes in time order, where their
+   numbers are equal, 55 of 81 pairs are one tick early. Its counts still match
+   in three configurations, because a spike moved to another tick counts the
+   same. All four MLX lanes record identical events
+   on the subnetwork in every configuration, so this is float32 rounding, not a
+   lane.
 8. **Upstream compatibility.** Write a parquet with `run_exp` on the
    subnetwork, load it with `data/ref/utils.py`'s `load_exps` and `get_rate`,
    compare with `experiment.rates`. Requires pandas; added to the `dev` extra
@@ -361,5 +399,5 @@ the full pack.
 
 ## Open points
 
-None that block implementation. The spike-time offset is decided by test 7 and
-has exactly one place to change.
+None that block implementation. Test 7 settled the spike-time offset: there is
+none.

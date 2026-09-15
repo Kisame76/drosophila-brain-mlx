@@ -19,6 +19,7 @@ pytestmark = pytest.mark.skipif(
 
 TICKS = 400
 RELAY_TICKS = 100
+CHUNK = 32
 SEED = 20260913
 LANES = ["naive", "chunked", "metal", "fused"]
 
@@ -33,15 +34,18 @@ def stim(pack):
     return core.make_stimulus(pack, n_ticks=TICKS, seed=SEED)
 
 
-def run_lane(lane, pack, stim, silenced=None):
+def run_lane(lane, pack, stim, silenced=None, **kw):
+    """kw goes to the lane: record for any, cap only for the kernel lanes."""
     from lif import engine_chunked, engine_fused, engine_metal, engine_naive
 
     return {
-        "naive": lambda: engine_naive.run(pack, stim, silenced=silenced, warmup=0),
-        "chunked": lambda: engine_chunked.run(pack, stim, silenced=silenced, chunk=32, warmup=0),
-        "metal": lambda: engine_metal.run(pack, stim, silenced=silenced, chunk=32, warmup=0),
-        "fused": lambda: engine_fused.run(pack, stim, silenced=silenced, chunk=32, warmup=0,
-                                          edge_split=1),
+        "naive": lambda: engine_naive.run(pack, stim, silenced=silenced, warmup=0, **kw),
+        "chunked": lambda: engine_chunked.run(pack, stim, silenced=silenced, chunk=CHUNK,
+                                              warmup=0, **kw),
+        "metal": lambda: engine_metal.run(pack, stim, silenced=silenced, chunk=CHUNK,
+                                          warmup=0, **kw),
+        "fused": lambda: engine_fused.run(pack, stim, silenced=silenced, chunk=CHUNK,
+                                          warmup=0, edge_split=1, **kw),
     }[lane]()
 
 
@@ -104,20 +108,22 @@ def silencing_case(request, pack, stim):
 
     mask = np.zeros(pack.n_neurons, dtype=bool)
     mask[chosen] = True
-    ref = engine_naive.run(pack, case_stim, silenced=mask, warmup=0)
+    ref = engine_naive.run(pack, case_stim, silenced=mask, warmup=0, record=True)
     return case_stim, mask, base, ref
 
 
 @pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
 def test_silencing_matches_naive(pack, silencing_case, lane):
     """Two implementations of one semantics must agree: a masked copy of the
-    edge counts (naive, chunked) and empty edge ranges in the kernel (metal, fused)."""
+    edge counts (naive, chunked) and empty edge ranges in the kernel (metal, fused).
+    Recorded, so the spike events are compared too."""
     case_stim, mask, _, ref = silencing_case
-    got = run_lane(lane, pack, case_stim, silenced=mask)
+    got = run_lane(lane, pack, case_stim, silenced=mask, record=True)
 
     assert got.counts_sha256() == ref.counts_sha256()
     assert np.array_equal(got.v_final, ref.v_final)
     assert np.array_equal(got.g_final, ref.g_final)
+    assert np.array_equal(got.events, ref.events)
 
 
 def test_silencing_changes_the_result(silencing_case):
@@ -197,6 +203,108 @@ def test_silenced_must_be_a_bool_mask_over_all_neurons(pack, stim, lane):
         run_lane(lane, pack, stim, silenced=np.array([3, 7]))
     with pytest.raises(ValueError):
         run_lane(lane, pack, stim, silenced=np.zeros(pack.n_neurons - 1, dtype=bool))
+
+
+# ---------------------------------------------------------------- recording
+@pytest.fixture(scope="module")
+def plain_naive(pack, stim):
+    return run_lane("naive", pack, stim)
+
+
+@pytest.fixture(scope="module")
+def recorded(pack, stim):
+    """Every lane on the shared stimulus with spike-event recording on."""
+    return {lane: run_lane(lane, pack, stim, record=True) for lane in LANES}
+
+
+@pytest.mark.parametrize("lane", LANES)
+def test_recording_is_off_by_default(pack, relay, lane):
+    assert run_lane(lane, pack, relay[2]).events is None
+
+
+@pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
+def test_events_match_naive(recorded, lane):
+    """The kernel lanes extract events in one Metal dispatch per chunk; the naive
+    lane calls np.nonzero on each tick, a code path they share nothing with."""
+    assert np.array_equal(recorded[lane].events, recorded["naive"].events)
+
+
+@pytest.mark.parametrize("lane", LANES)
+def test_events_are_sorted_unique_and_agree_with_counts(pack, recorded, lane):
+    r = recorded[lane]
+    ev = r.events
+    assert ev.dtype == np.int32 and ev.ndim == 2 and ev.shape[1] == 2
+    assert len(ev) == r.total_spikes() > 0
+    assert ev[:, 0].min() >= 0 and ev[:, 0].max() < TICKS
+    key = ev[:, 0].astype(np.int64) * pack.n_neurons + ev[:, 1]
+    assert np.all(np.diff(key) > 0), "sorted by (tick, neuron), and no event twice"
+    assert np.array_equal(np.bincount(ev[:, 1], minlength=pack.n_neurons), r.spike_counts)
+
+
+@pytest.mark.parametrize("lane", LANES)
+def test_recording_does_not_change_the_run(plain_naive, recorded, lane):
+    got = recorded[lane]
+    assert got.counts_sha256() == plain_naive.counts_sha256()
+    assert np.array_equal(got.v_final, plain_naive.v_final)
+    assert np.array_equal(got.g_final, plain_naive.g_final)
+
+
+@pytest.mark.parametrize("use_async", [True, False])
+@pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
+def test_recording_with_warmup_and_default_chunks(pack, stim, recorded, lane, use_async):
+    """The default path: warmup runs the event kernel as well and none of its events
+    may reach the result, at each lane's own chunk length (256, 64, 32), draining
+    after async_eval and after a blocking eval."""
+    from lif import engine_chunked, engine_fused, engine_metal
+
+    run = {"chunked": engine_chunked.run, "metal": engine_metal.run,
+           "fused": engine_fused.run}[lane]
+    got = run(pack, stim, record=True, warmup=50, use_async=use_async)
+    assert np.array_equal(got.events, recorded["naive"].events)
+
+
+def test_recording_one_chunk_longer_than_the_run(pack, stim, recorded):
+    from lif import engine_fused
+
+    got = engine_fused.run(pack, stim, chunk=4 * TICKS, warmup=0, edge_split=1, record=True)
+    assert np.array_equal(got.events, recorded["naive"].events)
+
+
+def test_recorded_fused_runs_are_deterministic(pack, stim, recorded):
+    """Three runs in all. Threads race for event slots; the sorted events must not vary."""
+    for _ in range(2):
+        again = run_lane("fused", pack, stim, record=True)
+        assert np.array_equal(again.events, recorded["fused"].events)
+
+
+def _spikes_per_chunk(recorded):
+    ticks = recorded["naive"].events[:, 0]
+    return np.bincount(ticks // CHUNK, minlength=-(-TICKS // CHUNK))
+
+
+@pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
+def test_record_overflow_names_the_first_overfull_chunk(pack, stim, recorded, lane):
+    """cap is the first chunk's own spike count: that chunk fits exactly, and the
+    overflow must name a later chunk by that chunk's ticks."""
+    from lif.spike_record import RecordOverflow
+
+    per_chunk = _spikes_per_chunk(recorded)
+    cap = int(per_chunk[0])
+    first = int(np.argmax(per_chunk > cap))
+    assert cap >= 1 and first > 0 and per_chunk[first] > cap, \
+        "a later chunk must overfill the first chunk's count"
+
+    with pytest.raises(RecordOverflow) as exc:
+        run_lane(lane, pack, stim, record=True, cap=cap)
+    assert exc.value.tick_range == range(first * CHUNK, min((first + 1) * CHUNK, TICKS))
+    assert exc.value.count == per_chunk[first]
+    assert exc.value.cap == cap
+
+
+def test_a_cap_equal_to_the_fullest_chunk_does_not_raise(pack, stim, recorded):
+    cap = int(_spikes_per_chunk(recorded).max())
+    got = run_lane("fused", pack, stim, record=True, cap=cap)
+    assert np.array_equal(got.events, recorded["fused"].events)
 
 
 # ---------------------------------------------------------------- kernel

@@ -29,7 +29,7 @@ import time
 import mlx.core as mx
 import numpy as np
 
-from lif import core
+from lif import core, spike_record
 from lif.engine_metal import EDGE_SPLIT, propagate, silenced_row_end
 from lif.engine_naive import RunResult
 
@@ -95,7 +95,10 @@ _state_kernel = mx.fast.metal_kernel(
 
 def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
         chunk: int = 32, use_async: bool = True, warmup: int = 50,
-        edge_split: int = EDGE_SPLIT) -> RunResult:
+        edge_split: int = EDGE_SPLIT, record: bool = False,
+        cap: int = spike_record.CAP) -> RunResult:
+    """record=True also returns the spike events, extracted on the device once per
+    chunk (lif.spike_record); cap is the most events one chunk may produce."""
     # Read by the propagation kernel only, as empty edge ranges, so a silenced
     # neuron still spikes and counts here.
     row_end = silenced_row_end(pack, core.silenced_mask(pack, silenced))
@@ -120,7 +123,7 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         ring = [mx.zeros((N,), dtype=mx.uint8) for _ in range(core.DELAY_TICKS)]
         return st, ring
 
-    def encode(st, ring, t0, kk):
+    def encode(st, ring, t0, kk, spikes=None):
         v, g, rfc, counts = st["v"], st["g"], st["rfc"], st["counts"]
         rl = st["rfc_reload"]
         for t in range(t0, t0 + kk):
@@ -137,33 +140,45 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
                 threadgroup=(256, 1, 1),
             )
             ring[s] = spike
+            if spikes is not None:
+                spikes.append(spike)
         return {"v": v, "g": g, "rfc": rfc, "counts": counts, "rfc_reload": rl}, ring
 
+    # With recording on, warmup compiles the event kernel too; its events are
+    # never read.
     w = min(warmup, n)
     if w:
         st, ring = fresh()
-        st, ring = encode(st, ring, 0, w)
-        mx.eval(*st.values(), *ring)
+        spikes = [] if record else None
+        st, ring = encode(st, ring, 0, w, spikes)
+        out = spike_record.Recorder(N, cap).submit(spikes, 0) if record else []
+        mx.eval(*st.values(), *ring, *out)
 
     state, ring = fresh()
     mx.eval(*state.values(), *ring)
+    rec = spike_record.Recorder(N, cap) if record else None
 
     mx.reset_peak_memory()
     start = time.perf_counter()
     t = 0
     while t < n:
         kk = min(chunk, n - t)
-        state, ring = encode(state, ring, t, kk)
+        spikes = [] if rec is not None else None
+        state, ring = encode(state, ring, t, kk, spikes)
+        out = rec.submit(spikes, t) if rec is not None else []
         if use_async:
-            mx.async_eval(*state.values(), *ring)
+            mx.async_eval(*state.values(), *ring, *out)
         else:
-            mx.eval(*state.values(), *ring)
+            mx.eval(*state.values(), *ring, *out)
+        if rec is not None:
+            rec.drain(keep=1)  # the previous chunk; see spike_record.Recorder
         t += kk
     mx.eval(*state.values(), *ring)
+    events = rec.events() if rec is not None else None
     elapsed = time.perf_counter() - start
 
     return RunResult(
         spike_counts=np.asarray(state["counts"]), v_final=np.asarray(state["v"]),
         g_final=np.asarray(state["g"]), n_ticks=n, seconds=elapsed,
-        peak_bytes=mx.get_peak_memory(),
+        peak_bytes=mx.get_peak_memory(), events=events,
     )
