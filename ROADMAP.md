@@ -26,7 +26,8 @@ through the same four lanes. A run can drive chosen neurons at one or two rates
 (`core.make_stimulus_for`), silence others (`silenced=`) and record which neuron
 fired in which tick (`record=True`), and `lif.experiment.run_exp` runs the
 published model's experiments with upstream's arguments and parquet format, which
-upstream's `get_rate` reads unchanged. One standard experiment, 30
+upstream's `get_rate` reads unchanged. On the MaleCNS pack it takes cell types
+and instances as names, such as `"MN9"`. One standard experiment, 30
 trials of 1 s, takes 10.05 s end to end. With the sugar GRNs driven at 100 Hz, MN9
 fires at 67.30 Hz on the real connectome and not once on any of five copies whose wiring
 is shuffled with every neuron's degrees kept (phase 3, the control demo).
@@ -117,13 +118,26 @@ upstream's, evaluated with Brian2's units. Measured end to end,
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 
-## Phase 2: names
+## Phase 2: names (done)
 
 FlyWire ships no cell-type names; the published model takes a user-supplied
-`flyid2name` dict and so does phase 1. MaleCNS ships `type`, `instance`,
-`class` and a `flywireType` cross-reference per neuron. Phase 2 stores those as
-a sidecar in the MaleCNS pack and lets `run_exp` resolve names from it, so
-neurons can be addressed as `"MN9"` rather than by a 19-digit ID.
+`flyid2name` dict, and on the FlyWire pack `run_exp` still does. MaleCNS ships
+`type`, `instance`, `class` and a `flywireType` cross-reference per neuron.
+`python -m lif.compile_pack_malecns` writes those next to the pack as
+`names.parquet`, one row per model index, and records a hash of the table's
+content in the manifest; `--names-only` adds the sidecar to a pack already
+compiled, once the annotation table's sha256 matches the one the pack was
+compiled from. With no `names` given, `run_exp` resolves a name from the sidecar
+(`lif.names`): a name selects every neuron whose instance it is and, if there is
+none, every neuron whose type it is, so `"MN9_R"` is body 16949 and `"MN9"` is
+bodies 10331 and 16949. `lif.names.load(pack).labels()` gives `rates` a name per
+neuron. `verify_pack` re-derives the sidecar from the annotation table with a
+dict on body ID and compares it row by row; run on 2026-09-15, it found all
+166,700 rows equal and verified the rest of the pack, 24,469,412 edges, as
+before.
+
+Of the 166,700 neurons in the MaleCNS pack, counted 2026-09-15, 164,506 have a
+type, 160,061 an instance, 143,154 a flywireType and 26,513 a class.
 
 ## Phase 3: seeing it
 

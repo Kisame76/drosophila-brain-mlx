@@ -307,6 +307,22 @@ change; the model constants are compiled in. Trial `n` draws its input with
 spike trains. 30 trials of 1 s with the sugar drive take 10.05 s end to end
 (ROADMAP, "Phase 1"), against 31 min extrapolated for Brian2 on one core.
 
+On the MaleCNS pack, names need no dict. `python -m lif.compile_pack_malecns`
+writes the annotation table's `type`, `instance`, `class` and `flywireType` next
+to the pack (`--names-only` adds them to a pack already compiled), and `run_exp`
+looks a name up there when no `names` are given. A name selects every neuron
+whose instance it is or, if there is none, every neuron whose type it is, so
+`"MN9_R"` is one neuron and `"MN9"` both; the file's metadata lists the IDs that
+ran. On the FlyWire pack, which ships no names, pass `names=` as upstream does.
+
+```python
+from lif import core, names
+
+malecns = core.load_pack(core.PACK_DIR.parent / "male_cns_v1")
+path = run_exp("mn9", ["MN9"], "results", params=params, pack=malecns)
+table = rates(path, names=names.load(malecns).labels())   # instance, else type
+```
+
 What recording costs in the fused lane, measured 2026-09-14 in High Power mode,
 recording on and off interleaved in one process per pack, median of 7, load
 average 2.75 to 3.28. That load slows the fused lane (see "How much to trust
@@ -493,6 +509,7 @@ src/lif/
   control_demo.py          MN9 under the sugar drive on the real and the shuffled pack, as an SVG
   core.py                  constants, pack loader, stimulus, initial state
   experiment.py            run_exp and rates, compatible with the published model
+  names.py                 cell-type names of the MaleCNS pack, as run_exp resolves them
   stimulus_flybrain.py     flyBrain's splitmix64 sugar-GRN stimulus
   engine_naive.py          eval() per tick — the deliberately slow baseline
   engine_chunked.py        N ticks per eval, async_eval

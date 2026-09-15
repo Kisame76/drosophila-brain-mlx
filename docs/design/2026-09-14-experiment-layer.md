@@ -371,7 +371,11 @@ differs from the above in these points:
 - **Signature.** Upstream's positional order is kept, with `path_comp` and
   `path_con` optional; only the additions are keyword-only. `edge_split`
   defaults to 1, the value for a sparse drive.
-- **Names.** A name given to two neurons raises only when it is used.
+- **Names.** A name given to two neurons raises only when it is used. With no
+  `names` given, a name is looked up in the pack's names sidecar (`lif.names`,
+  ROADMAP phase 2), where it selects every neuron whose instance it is and, if
+  there is none, every neuron whose type it is. The FlyWire pack has no sidecar,
+  so there a name without `names` still raises.
 - **Rows** are sorted by trial, model index and time, which is upstream's order;
   both packs list their IDs in ascending order, so it is also by ID.
 - **Metadata** is one JSON value under the key `mlx_lif_engine`, which also
