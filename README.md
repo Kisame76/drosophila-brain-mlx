@@ -1,12 +1,24 @@
 # drosophila-brain-mlx
 
-A leaky integrate-and-fire simulation of the *Drosophila* connectome, written in
-Apple MLX and accelerated with a custom Metal kernel. It runs the published
-Shiu et al. model — all 127,400 FlyWire v630 neurons and 14,687,178 directed
-edges — at **0.29 seconds per biological second** on an M4 Pro, against
-**62.6 s** for the reference Brian2 implementation on the same machine.
+<p align="center">
+  <img src="docs/figures/activity-film.png" width="480" alt="Recorded spikes in the MaleCNS pack at their neurons' soma positions, brain at the top and ventral nerve cord below, while sugar-sensing neurons of the right labellum receive 100 Hz input; the view turns once over one second of biological time">
+</p>
 
-Same model, same parameters, same tick ordering. Only faster.
+The published Shiu et al. leaky integrate-and-fire model — all 127,400 FlyWire
+v630 neurons and 14,687,178 directed connections — runs at **0.29 seconds per
+biological second** on an M4 Pro, where the reference Brian2 implementation takes
+**62.6 s** on the same machine.
+
+```bash
+uv venv --python 3.13 && uv pip install -e .
+./tools/fetch_upstream.sh          # ~90 MB from philshiu/Drosophila_brain_model
+python -m lif.compile_pack         # builds data/pack/v630, ~114 MB
+```
+
+Same model, same parameters, same tick ordering. Only faster. The film above is a
+different dataset — one second of sweet-taste input on MaleCNS v1.0, every dot a
+neuron at its soma position — and what it does and does not show is under
+[Where the activity goes](#where-the-activity-goes).
 
 ## What this is
 
@@ -16,9 +28,9 @@ brain takes about a minute, which makes sweeps and interactive work painful.
 This repository is the same model reimplemented so that a second of brain time
 costs less than a second of wall clock.
 
-Nothing here is trained or learned. The 14.7 million synapses come from FlyWire —
-real fly brains, sectioned, imaged under an electron microscope, every connection
-traced. The engine integrates membrane voltage through that fixed wiring.
+Nothing here is trained or learned. The 14.7 million connections come from
+FlyWire — real fly brains, sectioned, imaged under an electron microscope, every
+one of them traced. The engine integrates membrane voltage through that fixed wiring.
 
 ## Does the wiring matter?
 
@@ -49,10 +61,7 @@ python -m lif.control_demo
 
 ## Where the activity goes
 
-<p align="center">
-  <img src="docs/figures/activity-film.png" width="480" alt="Recorded spikes in the MaleCNS pack at their neurons' soma positions, brain at the top and ventral nerve cord below, while sugar-sensing neurons of the right labellum receive 100 Hz input; the view turns once over one second of biological time">
-</p>
-
+The film at the top of this page is this run.
 MaleCNS v1.0 covers the brain and the ventral nerve cord, and its annotation table
 gives most neurons a soma position, so a run on that pack can be watched in space.
 Here the 17 neurons of the types LB3b and LB3c in the right labellum get Poisson

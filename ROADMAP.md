@@ -221,9 +221,10 @@ Ordered by how much each shows per unit of work.
    CNS's long axis. Measured 2026-09-15, seed 0: 1,036,265 spikes from 5,021
    neurons, 4,957 of them drawn; neurons of the ventral nerve cord's superclasses
    fire 28.6 % of the spikes in the first 100 ms and 66.9 % in the last; MN9_L
-   fires at 52.97 Hz and MN9_R at 0.20 Hz. The README shows it under "Where the
-   activity goes", labelled as visualization, not evidence, because the constants
-   were fitted to the FlyWire brain.
+   fires at 52.97 Hz and MN9_R at 0.20 Hz. The README shows it at the top of the
+   page and discusses it under "Where the activity goes", labelled as
+   visualization, not evidence, because the constants were fitted to the FlyWire
+   brain.
 
    What it took: no new pack data. The positions are read from the annotation
    table the pack was compiled from, once its sha256 matches the manifest, and the
