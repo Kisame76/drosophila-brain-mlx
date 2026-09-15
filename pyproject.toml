@@ -13,8 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Only needed to reproduce the Brian2 validation; the engines do not import it.
-reference = ["brian2>=2.9.0"]
+# Only needed to reproduce the validations against Brian2 and against upstream's
+# example notebook, whose utils.py imports pandas; the engines import neither.
+reference = ["brian2>=2.9.0", "pandas>=2.2"]
 dev = ["pytest>=8.0"]
 
 [tool.setuptools.packages.find]
