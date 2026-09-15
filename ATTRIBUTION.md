@@ -62,7 +62,8 @@ LB3c because of
 
 which matches both types to Gr64f-GAL4 neurons, so they are likely sweet-sensing.
 The soma positions the film draws are the `somaLocation` column of the MaleCNS
-annotation table above.
+annotation table above. `src/lif/stimulus_survey.py` also drives LB3a, which the
+same preprint matches to ppk28, the water receptor.
 
 ## Brian2
 

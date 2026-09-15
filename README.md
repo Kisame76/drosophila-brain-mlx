@@ -66,10 +66,11 @@ lit by how often it spiked in those 10 ms over the 30 trials; the blue haze is t
 
 Measured with `python -m lif.activity_film`, seed 0: 1,036,265 spikes from 5,021
 neurons, 4,957 of them drawn; the other 64, the 17 driven neurons among them, have
-no soma position in the table. Neurons of the ventral nerve cord's superclasses
-(`vnc_*`) fire 28.6 % of the spikes in the first 100 ms and 66.9 % in the last
-100 ms, and the spikes per 10 ms go from 576 in the first window to 12,452 in the
-last. MN9_L fires at 52.97 Hz and MN9_R at 0.20 Hz.
+no soma position in the table. MN9_L fires at 52.97 Hz and MN9_R at 0.20 Hz.
+Counted by `python -m lif.stimulus_survey` on the same trials, neurons of the
+ventral nerve cord's superclasses (`vnc_*`) fire 28.6 % of the spikes in the first
+100 ms and 66.9 % in the last, while all spikes per trial in 100 ms go from 1,629
+to 4,137.
 
 This is a visualization, not evidence. The spike times come from the model and the
 positions from the annotation table; the projection, colours, haze and slow motion
@@ -77,6 +78,38 @@ are choices for drawing them. The model's constants are Shiu et al.'s, fitted to
 the FlyWire brain and not refitted to this connectome, which adds the ventral nerve
 cord, so the film cannot say whether a fly's nervous system spreads activity this
 way.
+
+What the film does show is a property of this model on this connectome, and not
+one that every stimulus brings out. `python -m lif.stimulus_survey` runs the film's
+stimulus and seven others at 100 Hz, 30 trials each, and counts the spikes in every
+100 ms:
+
+| stimulus | neurons | VNC's share of the spikes, first → last 100 ms | abdominal neurons above 100 Hz in the last 100 ms |
+|---|---|---|---|
+| LB3b_R and LB3c_R, the film's | 17 | 28.6 → 66.9 % | 69 |
+| LB3a_R, water taste | 8 | 41.2 → 48.4 % | 0 |
+| ORN_DM1_R, smell | 39 | 4.4 → 5.0 % | 2 |
+| JO-CM_R, Johnston's organ | 14 | 30.1 → 38.6 % | 12 |
+| LC4_R, vision | 55 | 42.3 → 43.9 % | 0 |
+| DNp01, the giant fibers | 2 | 47.1 → 57.3 % | 0 |
+| LgLG1a_R, taste neurons of the VNC | 68 | 53.3 → 49.5 % | 10 |
+| SNpp50, proprioceptors of the VNC | 62 | 88.6 → 89.0 % | 0 |
+
+The film's rise lives in the abdominal neuromeres, where 69 of the 85 neurons above
+100 Hz at its end sit, 55 of them in A7 to A10. With the outgoing synapses of all
+2,156 abdominal VNC neurons silenced, the VNC's share stays between 25.1 and 29.9 %.
+Once the state is reached a trial holds it without the input, but not every trial
+reaches it, and every figure above is a mean over the 30. Counted trial by trial in
+the last 100 ms: with the input on throughout, all 30 trials end between 2,440 and
+3,345 VNC spikes; switched off after 500 ms, 25 of them do, between 2,518 and
+3,514, while four fall to 477 to 877 and one falls silent; switched off after
+200 ms, only 10 keep going, between 2,618 and 3,342, while 16 hold between 273 and
+878 and four fall silent. The brain does not hold: in the 500 ms run its spikes
+fall from 853 to 189 per trial per 100 ms. Pooled over the 30 trials that same
+200 ms run reads instead as a steady 1,209 to 1,296 VNC spikes with no neuron above
+100 Hz, which is a mean of trials that settled differently and not a description of
+any of them. The smell stimulus has an effect of its own in the brain, where 1,170
+neurons end above 100 Hz.
 
 ```bash
 python -m lif.activity_film
@@ -584,6 +617,7 @@ src/lif/
   shuffle_pack.py          a pack with random wiring and the same degrees, as a control
   control_demo.py          MN9 under the sugar drive on the real and the shuffled pack, as an SVG
   activity_film.py         a MaleCNS run's spikes at their soma positions, as an animated PNG
+  stimulus_survey.py       MaleCNS spikes over a trial by region, for the film's and seven other stimuli
   core.py                  constants, pack loader, stimulus, initial state
   experiment.py            run_exp and rates, compatible with the published model
   names.py                 cell-type names of the MaleCNS pack, as run_exp resolves them
