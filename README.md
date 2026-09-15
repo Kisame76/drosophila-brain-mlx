@@ -206,15 +206,17 @@ Read the comparisons carefully:
   re-measured, and after the Brian2 figure turned out to be wrong for exactly
   that reason, an unverified number is not worth the space it takes.
 
-  The flyBrain row itself was re-measured on 2026-09-15 and held: five runs
-  averaged 0.3771 s per biological second against the 0.3769 above, allocating
-  the same 94 MB, so the margin against this engine's 0.2937 from the same day is
-  22.1 %. The comparison is matched rather than assumed, because flyBrain's own
-  output names what it ran — `right_sugar_grns`, `splitmix64-counter-v1`, 21
+  The flyBrain row itself was re-measured on 2026-09-15 and held. At 20260816,
+  the seed `lif.benchmark` runs, five runs averaged 0.3781 s per biological
+  second against the 0.3769 above and allocated the same 94 MB, so the margin
+  against this engine's 0.2937 from the same day is 22.3 %; at seed 0 the same
+  five-run average is 0.3771, so the timing hardly notices the seed. flyBrain's
+  own output names what it ran — `right_sugar_grns`, `splitmix64-counter-v1`, 21
   targets at 150 Hz over 10,000 steps — and its spike-count SHA-256 was identical
-  in every run. It fires 16,865 spikes there against this engine's 13,594, which
-  is the refractory difference under "One open discrepancy", not noise.
-  `tools/setup_flybrain_reference.sh` prints the command.
+  across the runs at a given seed. At 20260816 it fires 16,796 spikes against
+  this engine's 13,594, and that 16,796 is the figure recorded under "One open
+  discrepancy" below, measured again here: the gap is the refractory difference,
+  not noise. `tools/setup_flybrain_reference.sh` prints the command.
 
 ### How much to trust these
 
@@ -658,6 +660,16 @@ kernel does not do, and a stricter parity gate.
 
 `tools/setup_flybrain_reference.sh` builds it locally so anyone can re-run the
 comparison instead of taking the numbers on trust.
+
+Measured again on 2026-09-15 at 20260816, the seed `lif.benchmark` runs: the
+16,796 in the paragraph below reproduced exactly, five runs of `flybrain-rs
+simulate` agreeing to the spike. The other two figures there did not.
+`bench/results.json`, written by the same commit as that paragraph, records this
+engine at **13,594** spikes for that seed and run length, not 13,354; and
+17,315 − 16,796 is 519, not the 819 the paragraph calls the residual. What
+produced 13,354 and 17,315 is recorded nowhere here, and reproducing them means
+disabling the refractory gate inside the engine, so the paragraph is left exactly
+as it was written and this note records what was measured instead.
 
 ### One open discrepancy
 
