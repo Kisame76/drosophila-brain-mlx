@@ -75,6 +75,14 @@ def test_the_sidecar_is_recorded_in_the_manifest_and_loads_with_the_pack(tmp_pat
     assert names.load(core.load_pack(_pack(tmp_path / "bare"))) is None
 
 
+def test_a_pack_loaded_from_a_string_path_finds_its_sidecar(tmp_path):
+    path = _pack(tmp_path / "tiny")
+    names.write_names(path, names.names_table(_annotations(), IDS), source="annotations")
+    pack = core.load_pack(str(path))
+    assert pack.path == path
+    assert names.load(pack).select("MN9_R") == [3]
+
+
 def test_a_sidecar_that_does_not_match_its_pack_is_refused(tmp_path):
     path = _pack(tmp_path / "tiny")
     table = names.names_table(_annotations(), IDS)

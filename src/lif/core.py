@@ -106,7 +106,8 @@ class Pack:
     path: Path | None = None  # the directory it was loaded from, where its sidecars are
 
 
-def load_pack(pack_dir: Path = PACK_DIR, verify_hashes: bool = True) -> Pack:
+def load_pack(pack_dir: Path | str = PACK_DIR, verify_hashes: bool = True) -> Pack:
+    pack_dir = Path(pack_dir)
     manifest = json.loads((pack_dir / "manifest.json").read_text())
     arrays = {}
     for name, meta in manifest["arrays"].items():
