@@ -4,7 +4,7 @@ Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
 spike-event recording implemented and its overhead measured ("Spike-event
 recording", tests 1 to 4 and 7); the two-rate stimulus implemented ("Stimulus
 with two rates", test 10); `run_exp` and `rates` implemented (tests 8 and 9);
-the end-to-end measurement of 30 trials not yet.
+measured end to end, 10.05 s for 30 trials of 1 s.
 Implements phase 1 of [ROADMAP.md](../../ROADMAP.md).
 
 ## Goal
@@ -462,7 +462,7 @@ the full pack.
 - fused lane with a non-empty `silenced` mask: done, README "Use"
 - `run_exp` end to end, 30 trials, sugar stimulus: total wall clock, and the
   Brian2 figure it replaces (31 min, extrapolated from the measured 62.6 s per
-  trial and stated as such)
+  trial and stated as such): done, 10.05 s, ROADMAP "Phase 1"
 
 ## Open points
 
