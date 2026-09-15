@@ -127,9 +127,8 @@ neurons can be addressed as `"MN9"` rather than by a 19-digit ID.
 
 Ordered by how much each shows per unit of work.
 
-1. **The control demo: does the wiring matter?** Next after phase 1, ahead of
-   phase 2. Drive the 21 sugar GRNs as upstream's example notebook does and read
-   out MN9, the proboscis motor neuron that notebook reports, twice: once on the
+1. **The control demo: does the wiring matter?** Drive the 21 sugar GRNs as
+   upstream's example notebook does and read out MN9, the proboscis motor neuron that notebook reports, twice: once on the
    real connectome, once on a shuffled one that keeps every neuron's number of
    incoming and outgoing connections but wires them at random. Both shown side by
    side as rate over time, a histogram of the recorded spike events, so every
@@ -147,8 +146,11 @@ Ordered by how much each shows per unit of work.
    parity-gated against the published model.
 
    What it needs: a shuffled pack, marked in its manifest as not the real
-   connectome; a script that runs both packs through `run_exp` and plots the
-   result; and the MN9 ID from upstream's notebook. The finished plot belongs
+   connectome, which `python -m lif.shuffle_pack` now builds (v630, seed 0: 6
+   repair rounds, 289 self-loops, and 90,491 of its 14,687,178 edges where the
+   real pack has one too); a script that runs both packs through `run_exp` and
+   plots the result; and MN9's ID, 720575940660219265 in upstream's notebook,
+   which is in the v630 pack. The finished plot belongs
    **in the README**, near the top. The repository currently opens with a table
    of milliseconds, which persuades someone who already knows what the model is
    and nobody else. Committed as a checked-in PNG or SVG plus the script that
