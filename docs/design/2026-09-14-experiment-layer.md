@@ -474,18 +474,6 @@ the full pack.
     `tests/test_validate_notebook.py` checks the parts: which cells run, the
     stand-in `model`, spike counts per trial, the z and the gate.
 
-## Measurements to add to the README
-
-- fused lane with `record=True`, s per biological second and peak memory: done,
-  README "Use"
-- fused lane with a non-empty `silenced` mask: done, README "Use"
-- `run_exp` end to end, 30 trials, sugar stimulus: total wall clock, and the
-  Brian2 figure it replaces: done, 10.05 s, ROADMAP "Phase 1". That Brian2 side
-  was re-measured on 2026-09-15 and corrected: 2.07 s per trial over a full
-  biological second, not 62.6, so the 30-trial comparison is about 77 s rather
-  than 31 min (README, "Results")
-
-## Open points
-
-None that block implementation. Test 7 settled the spike-time offset: there is
-none.
+Test 7 settled the spike-time offset: there is none. Every measurement this
+document called for is in the README, and the Brian2 figure it compared against
+was corrected on 2026-09-15 (README, "Results").
