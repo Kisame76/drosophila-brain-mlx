@@ -39,6 +39,16 @@ def names_table(annotations: pa.Table, neuron_ids: np.ndarray) -> pa.Table:
     missing = [c for c in ("bodyId", *COLUMNS) if c not in annotations.column_names]
     if missing:
         raise ValueError(f"annotations lack the columns {missing}")
+    ids = np.asarray(neuron_ids, dtype=np.int64)
+    rows = pa.array(annotation_rows(annotations, ids))
+    return pa.table({"bodyId": pa.array(ids, pa.int64()),
+                     **{c: annotations[c].take(rows).cast(pa.string()) for c in COLUMNS}})
+
+
+def annotation_rows(annotations: pa.Table, neuron_ids: np.ndarray) -> np.ndarray:
+    """The row of annotations that describes each neuron, in pack order."""
+    if "bodyId" not in annotations.column_names:
+        raise ValueError("annotations lack the columns ['bodyId']")
     body = annotations["bodyId"].to_numpy().astype(np.int64)
     values, times = np.unique(body, return_counts=True)
     if (times > 1).any():
@@ -50,9 +60,7 @@ def names_table(annotations: pa.Table, neuron_ids: np.ndarray) -> pa.Table:
     found[found] = body[order][at[found]] == ids[found]
     if not found.all():
         raise ValueError(f"neurons without an annotation row: {ids[~found].tolist()}")
-    rows = pa.array(order[at])
-    return pa.table({"bodyId": pa.array(ids, pa.int64()),
-                     **{c: annotations[c].take(rows).cast(pa.string()) for c in COLUMNS}})
+    return order[at]
 
 
 def content_sha256(table: pa.Table) -> str:
