@@ -15,8 +15,10 @@ connectivity come from:
 
 Code and data: https://github.com/philshiu/Drosophila_brain_model (MIT).
 `tools/fetch_upstream.sh` downloads `2023_03_23_completeness_630_final.csv` and
-`2023_03_23_connectivity_630_final.parquet` from that repository; neither file is
-redistributed here.
+`2023_03_23_connectivity_630_final.parquet` from that repository, together with
+its `model.py`, `utils.py`, `Readme.md` and `example.ipynb` and the five result
+files of that notebook in `results/example`, which `python -m lif.validate_notebook`
+compares against; none of these files is redistributed here.
 
 The connectome itself is FlyWire v630. Cite FlyWire per its own policy when
 publishing results derived from it: https://flywire.ai

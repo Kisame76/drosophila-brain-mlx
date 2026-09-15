@@ -4,8 +4,9 @@ Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
 spike-event recording implemented and its overhead measured ("Spike-event
 recording", tests 1 to 4 and 7); the two-rate stimulus implemented ("Stimulus
 with two rates", test 10); `run_exp` and `rates` implemented (tests 8 and 9);
-measured end to end, 10.05 s for 30 trials of 1 s.
-Implements phase 1 of [ROADMAP.md](../../ROADMAP.md).
+measured end to end, 10.05 s for 30 trials of 1 s; upstream's example notebook
+run against the Brian2 files upstream published for it (test 11, 2026-09-15).
+Implements phase 1 of [ROADMAP.md](../../ROADMAP.md), which is done.
 
 ## Goal
 
@@ -444,8 +445,8 @@ the full pack.
    lane.
 8. **Upstream compatibility.** Write a parquet with `run_exp` on the
    subnetwork, load it with `data/ref/utils.py`'s `load_exps` and `get_rate`,
-   compare with `experiment.rates`. Requires pandas; added to the `dev` extra
-   and skipped when absent.
+   compare with `experiment.rates`. Requires pandas, which is in the
+   `reference` extra, and skipped when absent.
 9. **`**config` compatibility.** `run_exp(exp_name, neu_exc, **config)` with
    upstream's exact `config` dict shape (including `n_proc`) runs; a
    `path_comp` with a wrong hash raises.
@@ -458,6 +459,20 @@ the full pack.
     changes their spike count; at 150 Hz the second set's neurons fire. Without a
     pack, `tests/test_stimulus.py` checks that the first set's draws do not
     depend on the second, that neither set is refractory, and each refusal.
+11. **The published notebook.** `python -m lif.validate_notebook` runs
+    upstream's `example.ipynb` with its code cells unchanged, `model` resolving
+    to `lif.experiment`, and checks that every file it writes carries this
+    engine's metadata. It then runs the five experiments whose Brian2 files
+    upstream publishes in `results/example` with seeds 0 and 1000, and compares
+    every neuron's rate over the 30 trials with the file's as a z score, and the
+    two seeds' runs with each other. It exits non-zero if spikes per trial or
+    MN9 differ by |z| 4 or more, or more than 1 % of the neurons by more than 4.
+    Measured 2026-09-15: all 15 comparisons pass, and between Brian2 and this
+    engine spikes per trial differ by at most z 1.90 and MN9 by at most z 1.70
+    (README, "Correctness"). Upstream's `sugarR` file was written at 200 Hz, not
+    at the 150 Hz of `model.py`'s `default_params`. Without the pack,
+    `tests/test_validate_notebook.py` checks the parts: which cells run, the
+    stand-in `model`, spike counts per trial, the z and the gate.
 
 ## Measurements to add to the README
 

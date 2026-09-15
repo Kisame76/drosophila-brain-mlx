@@ -26,8 +26,11 @@ through the same four lanes. A run can drive chosen neurons at one or two rates
 (`core.make_stimulus_for`), silence others (`silenced=`) and record which neuron
 fired in which tick (`record=True`), and `lif.experiment.run_exp` runs the
 published model's experiments with upstream's arguments and parquet format, which
-upstream's `get_rate` reads unchanged. On the MaleCNS pack it takes cell types
-and instances as names, such as `"MN9"`. One standard experiment, 30
+upstream's `get_rate` reads unchanged. Upstream's example notebook runs on it
+with its code cells unchanged, and its results agree with the Brian2 files
+upstream published for it within trial-to-trial noise (phase 1). On the MaleCNS
+pack it takes cell types and instances as names, such as `"MN9"`. One standard
+experiment, 30
 trials of 1 s, takes 10.05 s end to end. With the sugar GRNs driven at 100 Hz, MN9
 fires at 67.30 Hz on the real connectome and not once on any of five copies whose wiring
 is shuffled with every neuron's degrees kept (phase 3, the control demo). On the MaleCNS
@@ -63,12 +66,23 @@ photoreceptor transmitter in the fly, so most of the retina's output is absent
 from the signed graph. The model constants are reused unchanged from Shiu et
 al.; they were fitted to FlyWire, not to this dataset.
 
-## Phase 1: experiment layer
+## Phase 1: experiment layer (done)
 
 `run_exp(exp_name, neu_exc, path_res, neu_slnc=..., neu_exc2=..., ...)` with
 the same signature and the same parquet output as
 `philshiu/Drosophila_brain_model`, so the analysis notebooks published with the
 model run unchanged against this engine.
+
+Upstream's example notebook runs against this engine with its code cells
+unchanged, and the five of its experiments for which upstream published the
+files Brian2 wrote agree with this engine within their trial-to-trial noise.
+Checked 2026-09-15 with `python -m lif.validate_notebook`, which runs each of
+those experiments with seeds 0 and 1000 and compares every neuron's rate over
+the 30 trials as a z score: between Brian2 and this engine, spikes per trial
+differ by at most z 1.90 and MN9's rate by at most z 1.70, and 0 to 4 neurons of
+409 to 463 differ by more than |z| 3, as between the two seeds' runs of this
+engine, except in one seed-0 run with 13 (README, "Correctness"). Upstream's
+second notebook, `figures.ipynb`, was not run.
 
 One standard experiment is 30 trials of 1 biological second:
 
