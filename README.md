@@ -661,16 +661,6 @@ kernel does not do, and a stricter parity gate.
 `tools/setup_flybrain_reference.sh` builds it locally so anyone can re-run the
 comparison instead of taking the numbers on trust.
 
-Measured again on 2026-09-15 at 20260816, the seed `lif.benchmark` runs: the
-16,796 in the paragraph below reproduced exactly, five runs of `flybrain-rs
-simulate` agreeing to the spike. The other two figures there did not.
-`bench/results.json`, written by the same commit as that paragraph, records this
-engine at **13,594** spikes for that seed and run length, not 13,354; and
-17,315 − 16,796 is 519, not the 819 the paragraph calls the residual. What
-produced 13,354 and 17,315 is recorded nowhere here, and reproducing them means
-disabling the refractory gate inside the engine, so the paragraph is left exactly
-as it was written and this note records what was measured instead.
-
 ### One open discrepancy
 
 Its README states that incoming conductance can accumulate while a neuron is
@@ -680,13 +670,25 @@ refractory)` shields the variable from *every* write, synaptic input included. A
 spike arriving at a refractory neuron leaves its `g` at exactly `0.00000`, before
 and after the refractory period ends — dropped, not queued.
 
-This matters because it changes results: with a bit-identical stimulus, disabling
-the gate here moves 13,354 spikes to 17,315, close to their 16,796. A residual of
-819 spikes stays unexplained, so there is likely a second difference I have not
-found, and I may simply be wrong about how their engine handles this — I have not
-read their kernel closely enough to claim otherwise.
+This matters because it changes results. Measured on 2026-09-15 with the same
+stimulus on both sides — the sugar drive at 150 Hz, seed 20260816, 10,000 ticks —
+this engine fires **13,594** spikes as shipped and **16,382** with that one gate
+removed, against flyBrain's **16,796**. Removing it closes 87 % of the gap,
+from 3,202 spikes to 414, which is the strongest evidence available that this is
+the difference. The remaining 414 stay unexplained, so there is likely a second
+difference I have not found, and I may simply be wrong about how their engine
+handles this — I have not read their kernel closely enough to claim otherwise.
 
-Reproduce the Brian2 side with `python -m lif.validate_brian2` and the two-neuron
+Published here until that date: 13,354 moving to 17,315, with a residual of 819.
+Those three figures match no run recorded in this repository — `bench/results.json`
+has said 13,594 since the first commit — and 17,315 − 16,796 is 519 rather than
+819 in any case. They are superseded by the measurement above.
+
+Reproduce it with `python tools/refractory_gate.py`, which runs the dense lane
+twice, once as shipped and once with the gate removed, and refuses to report the
+second number unless the first reproduces `bench/results.json`. The engine is not
+modified: the tick function is copied into that script with the single line
+changed. The Brian2 side is `python -m lif.validate_brian2` and the two-neuron
 case described in the source. Corrections welcome.
 
 ## Repository
@@ -716,7 +718,8 @@ src/lif/
   benchmark.py             reproduces the results tables
 tests/                     parity, determinism and Brian2 spike-time gates, benchmark and stimulus checks
 bench/results*.json        measured numbers, written by the benchmark
-tools/                     upstream and MaleCNS fetch, demo.sh, reference engine build
+tools/                     fetch scripts, demo.sh, the Brian2 and refractory-gate
+                           measurements, flyBrain reference build
 ```
 
 ### Things that did not work
