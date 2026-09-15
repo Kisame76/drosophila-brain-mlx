@@ -49,6 +49,19 @@ publishes, so the two are comparable. The model constants are Shiu et al.'s and
 were fitted to FlyWire, not to this dataset; `src/lif/compile_pack_malecns.py`
 records that in the pack manifest.
 
+## Taste neuron types
+
+The activity film (`src/lif/activity_film.py`) drives the MaleCNS types LB3b and
+LB3c because of
+
+> Tastekin et al., *From Sensory Detection to Motor Action: The Comprehensive
+> Drosophila Taste-Feeding Connectome.* bioRxiv, 2025.
+> https://www.biorxiv.org/content/10.1101/2025.08.25.671814v1
+
+which matches both types to Gr64f-GAL4 neurons, so they are likely sweet-sensing.
+The soma positions the film draws are the `somaLocation` column of the MaleCNS
+annotation table above.
+
 ## Brian2
 
 Validation runs against Brian2 2.10.1 (CeCILL-2.1), and the closed-form update

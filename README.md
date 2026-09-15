@@ -45,6 +45,39 @@ python -m lif.shuffle_pack --pack data/pack/v630 --seed 0
 python -m lif.control_demo
 ```
 
+## Where the activity goes
+
+![Recorded spikes in the MaleCNS pack at their neurons' soma positions, brain at the top and ventral nerve cord below, while sugar-sensing neurons of the right labellum receive 100 Hz input; the view turns once over one second of biological time](docs/figures/activity-film.png)
+
+MaleCNS v1.0 covers the brain and the ventral nerve cord, and its annotation table
+gives most neurons a soma position, so a run on that pack can be watched in space.
+Here the 17 neurons of the types LB3b and LB3c in the right labellum get Poisson
+input at 100 Hz for 30 trials of one second. Tastekin et al.
+([2025](https://www.biorxiv.org/content/10.1101/2025.08.25.671814v1)) match both
+types to Gr64f-GAL4 neurons, which makes them likely sweet-sensing. Each frame is
+10 ms of biological time, played eight times slower, while the view turns once
+about the long axis of the CNS. An orange dot is a neuron at its soma position,
+lit by how often it spiked in those 10 ms over the 30 trials; the blue haze is the
+139,662 of 166,700 neurons that have a soma position.
+
+Measured with `python -m lif.activity_film`, seed 0: 1,036,265 spikes from 5,021
+neurons, 4,957 of them drawn; the other 64, the 17 driven neurons among them, have
+no soma position in the table. Neurons of the ventral nerve cord's superclasses
+(`vnc_*`) fire 28.6 % of the spikes in the first 100 ms and 66.9 % in the last
+100 ms, and the spikes per 10 ms go from 576 in the first window to 12,452 in the
+last. MN9_L fires at 52.97 Hz and MN9_R at 0.20 Hz.
+
+This is a visualization, not evidence. The spike times come from the model and the
+positions from the annotation table; the projection, colours, haze and slow motion
+are choices for drawing them. The model's constants are Shiu et al.'s, fitted to
+the FlyWire brain and not refitted to this connectome, which adds the ventral nerve
+cord, so the film cannot say whether a fly's nervous system spreads activity this
+way.
+
+```bash
+python -m lif.activity_film
+```
+
 ## What this is not
 
 - **Not a new model.** The equations, constants and connectivity are Shiu et al.'s.
@@ -509,6 +542,7 @@ src/lif/
   verify_pack.py           independent audit of a written pack
   shuffle_pack.py          a pack with random wiring and the same degrees, as a control
   control_demo.py          MN9 under the sugar drive on the real and the shuffled pack, as an SVG
+  activity_film.py         a MaleCNS run's spikes at their soma positions, as an animated PNG
   core.py                  constants, pack loader, stimulus, initial state
   experiment.py            run_exp and rates, compatible with the published model
   names.py                 cell-type names of the MaleCNS pack, as run_exp resolves them
@@ -549,11 +583,11 @@ Recorded so nobody repeats them:
 
 ## Roadmap
 
-The engine is the simulation half of the published model. The experiment half
-(activate a set of neurons, silence another, 30 trials, rates) is what comes
-next, with the same `run_exp` signature and parquet output as the original so
-its notebooks run unchanged. Order, conditions and what is deliberately left
-out: [ROADMAP.md](ROADMAP.md).
+The engine is the simulation half of the published model, and
+`lif.experiment.run_exp` the experiment half (activate a set of neurons, silence
+another, 30 trials, rates), with the same signature and parquet output as the
+original so its notebooks run unchanged. What comes next, in what order and under
+what conditions, and what is deliberately left out: [ROADMAP.md](ROADMAP.md).
 
 ## License and attribution
 
