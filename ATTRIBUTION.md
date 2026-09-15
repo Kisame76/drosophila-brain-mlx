@@ -43,7 +43,9 @@ Licensed **CC BY 4.0** per the release page, i.e. attribution only, with no
 non-commercial restriction. Credit FlyEM at HHMI Janelia, the
 University of Cambridge, the MRC LMB, Google Research and the MaleCNS
 collaboration. `tools/fetch_male_cns.sh` downloads the three published Feather
-tables; none of them is redistributed here.
+tables; none of them is redistributed here. `tools/demo.sh` calls that script,
+compiles the pack and draws the activity film, and prints the same credit in its
+output.
 
 The node selection and transmitter signs follow the materialization
 `male-cns-v1.0-superclass-non-null-known-nt`, which is also what `flyBrain`
