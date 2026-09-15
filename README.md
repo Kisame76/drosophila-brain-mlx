@@ -340,7 +340,9 @@ table = rates(path)   # flywire_id, name, rate_hz, std_hz per neuron that fired
 Upstream's `load_exps` and `get_rate` read the file unchanged. `params` is
 upstream's `default_params` in plain seconds, volts and hertz, and a Brian2
 quantity may replace any value, so `params['r_poi'] = 100 * Hz` works as in
-upstream's example notebook. Only `t_run`, `n_run`, `r_poi` and `r_poi2` can
+upstream's example notebook. That notebook runs on `run_exp` with its code cells
+unchanged, and its results agree with the Brian2 files upstream published for
+it ([Correctness](#correctness)). Only `t_run`, `n_run`, `r_poi` and `r_poi2` can
 change; the model constants are compiled in. Trial `n` draws its input with
 `seed + n`, so experiments with the same seed and `neu_exc` share their input
 spike trains. 30 trials of 1 s with the sugar drive take 10.05 s end to end
@@ -392,7 +394,7 @@ MaleCNS; details in
 
 ## Correctness
 
-Speed claims are worthless without a correctness gate, so there are two.
+Speed claims are worthless without a correctness gate, so there are three.
 
 **Between lanes.** All four engines must produce identical per-neuron spike
 counts from the same stimulus and seed, compared by SHA-256 over the full
@@ -429,6 +431,41 @@ without float64 on the GPU. Measured 2026-09-14, one row per run of
 `python -m lif.validate_brian2 <ticks> <seeds> <rate_hz>`, which exits non-zero
 if ref64 differs from Brian2 at all or if the fused lane leaves out or adds more
 than 5 % of Brian2's spikes.
+
+**Against the published notebook.** The Brian2 gate runs 800 neurons on a fixed
+spike train. Upstream also publishes the files its Brian2 `run_exp` wrote for
+five experiments of its example notebook, on the whole v630 brain with Poisson
+input, and `python -m lif.validate_notebook` checks this engine against them. It
+first runs the notebook's code cells as they are, with `model` resolving to
+`lif.experiment`: eleven of its twelve run, only the Colab setup cell with its
+shell commands is left out, and every file the notebook writes comes from this
+engine's fused lane. Then it runs the five experiments again with seeds 0 and
+1000. Brian2's random input is not this engine's, so the files can agree only in
+distribution. Each neuron's rate over the 30 trials is compared as a z score,
+the difference over its standard error, and the two seeds' runs are compared
+with each other the same way, which shows how far apart two runs of the same
+model fall.
+
+| sugar GRNs, silenced | spikes per trial: Brian2 · seed 0 · seed 1000 | MN9 (Hz): Brian2 · seed 0 · seed 1000 | neurons with \|z\| > 3: Brian2–seed 0 · Brian2–seed 1000 · seed 0–seed 1000 |
+|---|---|---|---|
+| 200 Hz, none | 17,052.2 · 17,027.8 · 17,052.5 | 93.27 · 94.23 · 92.73 | 0 of 461 · 3 of 463 · 4 of 463 |
+| 100 Hz, none | 9,635.8 · 9,698.8 · 9,719.7 | 67.03 · 67.30 · 67.67 | 1 of 421 · 2 of 418 · 0 of 411 |
+| 100 Hz, 720575940617937543 | 9,261.8 · 9,384.0 · 9,399.5 | 63.27 · 63.57 · 65.57 | 13 of 420 · 4 of 418 · 4 of 410 |
+| 100 Hz, 720575940621754367 | 9,566.8 · 9,494.7 · 9,644.1 | 66.90 · 66.87 · 68.60 | 1 of 409 · 1 of 434 · 1 of 436 |
+| 100 Hz, 720575940622695448 | 10,032.1 · 10,074.5 · 10,113.9 | 71.17 · 69.90 · 72.17 | 0 of 418 · 0 of 419 · 1 of 413 |
+
+Between Brian2 and this engine, spikes per trial differ by at most z 1.90 and
+MN9's rate by at most z 1.70. With 720575940617937543 silenced, the seed-0 run
+differs from Brian2's file in 13 neurons but the seed-1000 run in 4, as many as
+the two seeds' runs differ in, so that seed-0 run is the outlier. The command
+exits non-zero if spikes per trial or MN9 differ by |z| 4 or more, or more than
+1 % of the neurons by more than 4. That gate is for gross errors, and it catches
+one: upstream's `sugarR` file, the first row, was written at 200 Hz, the default
+the notebook's text gives, and its sugar GRNs fire at 196.75 Hz, while
+`default_params` in `model.py`, and so here, now say 150 Hz. Against the 150 Hz
+run the unchanged notebook makes, 354 of 455 neurons differ by more than |z| 4
+and spikes per trial by z −45.85. Measured 2026-09-15; the command needs Brian2
+and pandas, `pip install -e '.[reference]'`.
 
 ## How it works
 
@@ -559,6 +596,7 @@ src/lif/
   spike_record.py          spike events (tick, neuron), one Metal kernel per chunk
   subnet.py                connected subnetwork for Brian2 validation
   validate_brian2.py       Brian2 vs ref64 vs MLX, spike counts and spike times
+  validate_notebook.py     upstream's example notebook on this engine, against its published files
   benchmark.py             reproduces the results tables
 tests/                     parity, determinism and Brian2 spike-time gates, benchmark and stimulus checks
 bench/results*.json        measured numbers, written by the benchmark
@@ -590,8 +628,9 @@ Recorded so nobody repeats them:
 The engine is the simulation half of the published model, and
 `lif.experiment.run_exp` the experiment half (activate a set of neurons, silence
 another, 30 trials, rates), with the same signature and parquet output as the
-original so its notebooks run unchanged. What comes next, in what order and under
-what conditions, and what is deliberately left out: [ROADMAP.md](ROADMAP.md).
+original, so its example notebook runs with its code cells unchanged. What comes
+next, in what order and under what conditions, and what is deliberately left
+out: [ROADMAP.md](ROADMAP.md).
 
 ## License and attribution
 
