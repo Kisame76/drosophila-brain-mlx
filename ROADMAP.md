@@ -97,8 +97,9 @@ Recording let the Brian2 validation compare spike *times*, not only counts, and
 that comparison is stricter: the float64 oracle matches every Brian2 spike time
 in all four validation configurations, while the float32 lanes, whose counts
 match in three of them, put up to 38 of 24,700 spikes on a different tick
-(README, "Correctness"). What recording costs in run time is not measured yet.
-Next come the two-rate stimulus and `run_exp` itself.
+(README, "Correctness"). Recording costs the fused lane +3.8 % to +13.7 % in run
+time, the most on the sparse sugar drive (README, "Use"). Next come the two-rate
+stimulus and `run_exp` itself.
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 

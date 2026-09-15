@@ -67,7 +67,9 @@ Read the comparisons carefully:
   network barely active, and Brian2 slows down as activity rises while these
   lanes do not.
 - **vs. flyBrain (~22 %)** is a narrow win over a small, young project, and it
-  costs 7× the memory. Their engine also processes more spikes in this run
+  costs 7× the memory, most of it work that `async_eval` has scheduled and not
+  yet finished: with a blocking `eval` the same run peaks at 273 MB (see
+  [Use](#use)). Their engine also processes more spikes in this run
   because its refractory semantics differ (see below); at equal spike counts the
   margin is smaller, and under CPU load it falls to ~10 % (below).
 
@@ -244,8 +246,28 @@ seconds = spike_record.tick_to_seconds(tick)              # tick k is k * 0.1 ms
 
 The kernel lanes extract the events on the GPU, once per chunk, into a buffer of
 `cap` events (default 262,144 per chunk). A chunk that produces more raises
-`RecordOverflow` naming its ticks rather than dropping spikes. What recording
-costs in run time is not measured yet.
+`RecordOverflow` naming its ticks rather than dropping spikes.
+
+What recording costs in the fused lane, measured 2026-09-14 in High Power mode,
+recording on and off interleaved in one process per pack, median of 7, load
+average 2.75 to 3.28. That load slows the fused lane (see "How much to trust
+these"), so compare within a row, not with the table at the top:
+
+| pack, drive, ticks | s / biological s | with `record=True` | overhead | peak memory |
+|---|---|---|---|---|
+| FlyWire, 21 sugar GRNs, 10,000, `edge_split` 1 | 0.3361 | 0.3821 | +13.7 % | 669 → 380 MB |
+| FlyWire, 100 hubs, 2,000, `edge_split` 8 | 1.2355 | 1.2882 | +4.3 % | 685 → 380 MB |
+| MaleCNS, 100 hubs, 2,000, `edge_split` 8 | 1.3624 | 1.4142 | +3.8 % | 434 → 435 MB |
+
+The added time is nearly the same in every row, 0.046 to 0.053 s per biological
+second or 0.15 to 0.17 ms per 32-tick chunk, although the hub drives fire 2.7 to
+2.9 times as many spikes per tick as the sugar drive. It is a cost per chunk
+(stacking the chunk's spike masks, one dispatch, reading the events back), not
+per spike, so it weighs most where a tick is cheapest. The lower FlyWire peak is
+a side effect: a recording lane waits for the previous chunk before it encodes
+the next, so less scheduled work is in flight at once. With a blocking `eval`
+instead of `async_eval`, the same sugar run peaks at 273 MB without recording and
+283 MB with it; on MaleCNS all four combinations peak within 12 MB of each other.
 
 Measured with 10 silenced neurons that never fire, against the same run without
 a mask, the fused lane moved −1.16 % on FlyWire with the sugar drive and +0.01 %
