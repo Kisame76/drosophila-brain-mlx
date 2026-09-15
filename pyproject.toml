@@ -1,10 +1,36 @@
 [project]
+# The distribution name stays `mlx-lif-engine` although the repository and the
+# README are `drosophila-brain-mlx`, and the import package is `lif`. Renaming it
+# is not free: experiment.py stamps importlib.metadata.version("mlx-lif-engine")
+# into every parquet run_exp writes, and under another name that field degrades to
+# "unknown" without raising. Rename both together or neither.
 name = "mlx-lif-engine"
 version = "0.1.0"
 description = "MLX-native leaky integrate-and-fire engine for the Drosophila connectome (FlyWire v630, MaleCNS v1.0)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+authors = [{ name = "Kiyan Doguc" }]
+keywords = [
+  "connectome",
+  "drosophila",
+  "mlx",
+  "metal",
+  "apple-silicon",
+  "computational-neuroscience",
+  "spiking-neural-network",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 
 dependencies = [
   "mlx>=0.32.0",
@@ -17,6 +43,11 @@ dependencies = [
 # example notebook, whose utils.py imports pandas; the engines import neither.
 reference = ["brian2>=2.9.0", "pandas>=2.2"]
 dev = ["pytest>=8.0"]
+
+[project.urls]
+Homepage = "https://github.com/Kisame76/drosophila-brain-mlx"
+Repository = "https://github.com/Kisame76/drosophila-brain-mlx"
+Roadmap = "https://github.com/Kisame76/drosophila-brain-mlx/blob/main/ROADMAP.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
