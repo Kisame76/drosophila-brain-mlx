@@ -18,7 +18,7 @@ env/
 # Data — fetched with tools/fetch_upstream.sh, never redistributed (~90 MB)
 data/raw/
 data/ref/
-# Compiled pack — rebuilt with tools/compile_pack.py (~114 MB)
+# Compiled packs — rebuilt with python -m lif.compile_pack, lif.compile_pack_malecns and lif.shuffle_pack
 data/pack/
 
 # Reference engine — cloned and built by tools/setup_flybrain_reference.sh
