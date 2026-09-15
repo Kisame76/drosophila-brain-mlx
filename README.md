@@ -265,6 +265,12 @@ best of 3 runs, load average 1.79 before and 1.33 after; written to
 | this, dense MLX (chunked) | 31.86 (±0.015, n=3) | 1204 MB |
 | this, dense MLX (eval per tick) | 34.21 (±0.024, n=3) | 434 MB |
 
+Re-measured on 2026-09-15 with the same command, load average 1.86 before and
+1.72 after: 1.1691, 1.7135, 31.80 and 34.13 s per biological second, all four
+still parity PASS and every peak within 1 MB of the row above. The largest
+difference is 0.5 %, on the sparse Metal lane, so these rows stand as measured;
+they are kept rather than replaced because they are one coherent set.
+
 The surviving edge count, 24,469,412, is the same figure flyBrain publishes for
 the same published materialization, reached through an independently written
 filter. That agreement is the strongest evidence available that the selection
