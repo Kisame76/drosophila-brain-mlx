@@ -206,6 +206,16 @@ Read the comparisons carefully:
   re-measured, and after the Brian2 figure turned out to be wrong for exactly
   that reason, an unverified number is not worth the space it takes.
 
+  The flyBrain row itself was re-measured on 2026-09-15 and held: five runs
+  averaged 0.3771 s per biological second against the 0.3769 above, allocating
+  the same 94 MB, so the margin against this engine's 0.2937 from the same day is
+  22.1 %. The comparison is matched rather than assumed, because flyBrain's own
+  output names what it ran — `right_sugar_grns`, `splitmix64-counter-v1`, 21
+  targets at 150 Hz over 10,000 steps — and its spike-count SHA-256 was identical
+  in every run. It fires 16,865 spikes there against this engine's 13,594, which
+  is the refractory difference under "One open discrepancy", not noise.
+  `tools/setup_flybrain_reference.sh` prints the command.
+
 ### How much to trust these
 
 Two things were found on 2026-09-14 while re-measuring. Both are recorded

@@ -45,3 +45,13 @@ cargo build --release --bin flybrain-rs 2>&1 | tail -3
   --connectivity "$ROOT/data/raw/connectivity_630.parquet" \
   --output "$WORK/pack_v630" --materialization 630 >/dev/null
 echo "READY: $WORK/flyBrain/target/release/flybrain-rs + $WORK/pack_v630"
+echo
+echo "The comparison row in the README is this, reading realtime_factor:"
+echo
+echo "  $WORK/flyBrain/target/release/flybrain-rs simulate --pack $WORK/pack_v630 \\"
+echo "      --steps 10000 --rate-hz 150 --seed 0 --chunk-steps 256"
+echo
+echo "Repeat it a few times and take the mean. A first run is not slower than the"
+echo "rest, so flyBrain pays its shader compilation outside that timing; measured"
+echo "2026-09-15, five runs gave 0.3771 s per biological second and 94 MB. The JSON"
+echo "names the stimulus it used, which is what makes the comparison matched."
