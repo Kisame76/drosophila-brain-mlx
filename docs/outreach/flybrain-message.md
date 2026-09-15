@@ -62,16 +62,20 @@ refractory)` shields the variable from every write, synaptic input included. A
 spike arriving at a refractory neuron leaves `g` at exactly 0.00000, before and
 after the refractory period ends — dropped, not queued.
 
-It changes results. With a bit-identical stimulus, disabling that gate in my
-engine moves 13,354 spikes to 17,315, which is close to your 16,796. A residual
-of 819 spikes stays unexplained, so there is likely a second difference I have
-not found — and I have not read your kernel closely enough to claim your engine
-does what I think it does. If you have a Brian2 run that shows accumulation
-during the refractory period, I would like to see it, because then my float64
-oracle is wrong and I want to know.
+It changes results. Measured with the same stimulus on both sides — the sugar
+drive at 150 Hz, seed 20260816, 10,000 ticks — my engine fires 13,594 spikes as
+shipped and 16,382 with that gate removed, against your 16,796. Removing it
+closes 87 % of the gap, from 3,202 spikes to 414. The remaining 414 stay
+unexplained, so there is likely a second difference I have not found — and I have
+not read your kernel closely enough to claim your engine does what I think it
+does. If you have a Brian2 run that shows accumulation during the refractory
+period, I would like to see it, because then my float64 oracle is wrong and I
+want to know.
 
-Reproduction on my side is `python -m lif.validate_brian2` plus the two-neuron
-case described in the source.
+Reproduction on my side is `python tools/refractory_gate.py`, which runs that
+lane twice and will not report the second number unless the unmodified run first
+reproduces my recorded spike count, plus `python -m lif.validate_brian2` and the
+two-neuron case described in the source.
 
 Either way: thank you. The project would have been slower and worse without
 yours.
@@ -87,7 +91,7 @@ yours.
 | 0.3341 vs 0.3726 under load, +13.9 % / −1.1 % | README, "How much to trust these" |
 | 665 MB vs 94 MB, 273 MB with blocking `eval` | README, "Results" and "Use" |
 | `g` stays 0.00000 while refractory | README, "One open discrepancy" |
-| 13,354 → 17,315 vs their 16,796, residual 819 | README, "One open discrepancy" |
+| 13,594 → 16,382 vs their 16,796, 87 % of the gap closed | `tools/refractory_gate.py`, 2026-09-15 |
 
 The 22 % and the 10 % are both stated, not just the flattering one. If only one
 of them survives an edit, this message should not be sent.
