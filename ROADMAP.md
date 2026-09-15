@@ -8,9 +8,10 @@ it. Numbers here are measured unless marked otherwise.
 The order below is the reason the phases are numbered the way they are.
 
 1. **Researchers running the published model.** People who want to activate a
-   set of neurons, silence another, and compare firing rates, but do not want to
-   wait 31 minutes per experiment. This is what phases 1 and 2 serve, and it is
-   the only group the repository can serve without new unverifiable code.
+   set of neurons, silence another, and compare firing rates, but would rather
+   not wait over a minute for each one, and longer for a sweep of them. This is
+   what phases 1 and 2 serve, and it is the only group the repository can serve
+   without new unverifiable code.
 2. **Anyone coupling a brain to a body.** flybody, FlyGym, flyBrain's MuJoCo
    scene. Phase 4, and conditional: the interesting part is also the part this
    repository would not own. It matters because it is the only way the work
@@ -88,10 +89,17 @@ One standard experiment is 30 trials of 1 biological second:
 
 | | per trial | 30 trials |
 |---|---|---|
-| Brian2 2.10.1, one core | 62.6 s | 31 min |
+| Brian2 2.10.1, one core, cython | 2.07 s | ~77 s |
 | this engine, `run_exp`, fused lane | 0.335 s | 10.05 s |
 
-Brian2's 31 min are extrapolated from one measured trial. This engine's row is
+Brian2's 2.07 s is measured, over a full biological second, with
+`python tools/bench_brian2.py --ticks 10000` on 2026-09-15; three fresh processes
+agreed within 0.01 s. Its 30-trial figure is extrapolated from that plus the
+0.5 s upstream's `run_trial` spends rebuilding the network for every trial, and
+upstream runs trials in parallel across cores, so its wall clock is lower again.
+These two replace a per-trial 62.6 s and a 31 min total published until that
+date, which came from extrapolating a 200-tick run and overstated Brian2 about
+thirtyfold (README, "Results"). This engine's row is
 `run_exp` end to end, measured 2026-09-14 in High Power mode, load average 1.1
 to 1.4: 21 sugar GRNs at 150 Hz, pack already loaded, three repetitions of
 10.21, 10.05 and 10.05 s, the first including kernel compilation, each writing

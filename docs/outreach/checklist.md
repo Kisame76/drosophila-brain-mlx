@@ -92,7 +92,7 @@ be quoted without them.
 | | |
 |---|---|
 | fused lane, FlyWire v630 | 0.2933 s per biological second (2026-09-14 set), 0.2937 ±0.0004 re-measured 2026-09-15 |
-| Brian2, same model | 62.6 s per biological second — **earlier session**, not re-measured |
+| Brian2, same model | 2.07 s per biological second with cython, 8.38 s with numpy, measured 2026-09-15 |
 | vs. flyBrain | ~22 % on a quiet machine, ~10 % under load; 7× the peak memory |
 | one experiment, 30 trials of 1 s | 10.05 s end to end |
 | MaleCNS pack compile | 86 s |
@@ -106,6 +106,9 @@ be quoted without them.
 - The README's benchmark table was **not** updated with the 2026-09-15 re-run.
   It is labelled as one same-session set measured together with the flyBrain
   comparison, and splicing a single fresh row into it would destroy that.
-- Brian2 was not re-measured, so the 62.6 s keeps its "earlier session" label.
+- Brian2 was not re-measured *while this checklist was written*. It was measured
+  immediately afterwards, and the result corrected the README: 2.07 s per
+  biological second, not 62.6, so the comparison is **~7×**, not ~213×. Any
+  outreach draft quoting the old ratio must be fixed before it is used.
 - `src/lif/` was not touched, so the distribution name was left alone rather than
   breaking the version field described in item 3.
