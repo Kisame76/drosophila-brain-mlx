@@ -6,7 +6,7 @@ recording", tests 1 to 4 and 7); the two-rate stimulus implemented ("Stimulus
 with two rates", test 10); `run_exp` and `rates` implemented (tests 8 and 9);
 measured end to end, 10.05 s for 30 trials of 1 s; upstream's example notebook
 run against the Brian2 files upstream published for it (test 11, 2026-09-15).
-Implements phase 1 of [ROADMAP.md](../../ROADMAP.md), which is done.
+Implements the experiment layer, which is done.
 
 ## Goal
 
@@ -373,9 +373,9 @@ differs from the above in these points:
   `path_con` optional; only the additions are keyword-only. `edge_split`
   defaults to 1, the value for a sparse drive.
 - **Names.** A name given to two neurons raises only when it is used. With no
-  `names` given, a name is looked up in the pack's names sidecar (`lif.names`,
-  ROADMAP phase 2), where it selects every neuron whose instance it is and, if
-  there is none, every neuron whose type it is. The FlyWire pack has no sidecar,
+  `names` given, a name is looked up in the pack's names sidecar (`lif.names`),
+  where it selects every neuron whose instance it is and, if there is none,
+  every neuron whose type it is. The FlyWire pack has no sidecar,
   so there a name without `names` still raises.
 - **Rows** are sorted by trial, model index and time, which is upstream's order;
   both packs list their IDs in ascending order, so it is also by ID.

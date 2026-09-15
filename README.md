@@ -443,9 +443,11 @@ unchanged, and its results agree with the Brian2 files upstream published for
 it ([Correctness](#correctness)). Only `t_run`, `n_run`, `r_poi` and `r_poi2` can
 change; the model constants are compiled in. Trial `n` draws its input with
 `seed + n`, so experiments with the same seed and `neu_exc` share their input
-spike trains. 30 trials of 1 s with the sugar drive take 10.05 s end to end
-(ROADMAP, "Phase 1"), against about 77 s extrapolated for Brian2 on one core,
-which rebuilds the network for every trial.
+spike trains. 30 trials of 1 s with the sugar drive take 10.05 s end to end —
+measured 2026-09-14 in High Power mode, three repetitions of 10.21, 10.05 and
+10.05 s, the first including kernel compilation, each writing 409,437 spikes —
+against about 77 s extrapolated for Brian2 on one core, which rebuilds the
+network for every trial.
 
 On the MaleCNS pack, names need no dict. `python -m lif.compile_pack_malecns`
 writes the annotation table's `type`, `instance`, `class` and `flywireType` next
@@ -742,14 +744,32 @@ Recorded so nobody repeats them:
   delay constants before I caught it. Compare monitor row `t+1` against engine
   tick `t`. The correct values are the plain quotients: 22 and 18 ticks.
 
-## Roadmap
+## What is deliberately not here
 
 The engine is the simulation half of the published model, and
 `lif.experiment.run_exp` the experiment half (activate a set of neurons, silence
 another, 30 trials, rates), with the same signature and parquet output as the
-original, so its example notebook runs with its code cells unchanged. What comes
-next, in what order and under what conditions, and what is deliberately left
-out: [ROADMAP.md](ROADMAP.md).
+original, so its example notebook runs with its code cells unchanged. That is the
+whole of it. What was considered and left out, so it is not re-argued:
+
+- **Model-constant sweeps** (`v_th`, `tau`, ...). The constants are fixed at
+  compile time so the closed-form coefficients stay bit-identical to Brian2's.
+  Making them per-run parameters is possible; nobody has asked.
+- **Full-raster output** (every neuron, every 0.1 ms, dense). 152 MB per trial
+  for a 0.001 % occupancy. Events cover every use we know of.
+- **Portability.** Metal only. That is the point of the repository.
+- **Training or plasticity.** Nothing here learns.
+- **A native rate-first API** (`Experiment(excite=..., silence=..., trials=30)`),
+  which would have been tidier than upstream's signature and is what was
+  originally recommended. Rejected because a researcher's existing notebook
+  running unchanged is worth more than a nicer signature.
+- **A per-tick output port for a body.** Upstream computes rates as
+  `len(spikes in trial) / t_run`, counts only, so `spike_counts` already covers
+  the case. Coupling to flybody, FlyGym or flyBrain's MuJoCo scene would need
+  that port and a realtime brake, and would not own the gait generators, odour
+  decoders and landing gates between motor neurons and joints — flyBrain's README
+  calls those "engineering interfaces, not recovered circuits", and the same
+  would be true here. Only with a partner body.
 
 ## License and attribution
 

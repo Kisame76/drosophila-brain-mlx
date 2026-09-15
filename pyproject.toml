@@ -47,7 +47,6 @@ dev = ["pytest>=8.0"]
 [project.urls]
 Homepage = "https://github.com/Kisame76/drosophila-brain-mlx"
 Repository = "https://github.com/Kisame76/drosophila-brain-mlx"
-Roadmap = "https://github.com/Kisame76/drosophila-brain-mlx/blob/main/ROADMAP.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
