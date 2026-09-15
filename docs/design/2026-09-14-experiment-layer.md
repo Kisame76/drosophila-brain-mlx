@@ -480,8 +480,10 @@ the full pack.
   README "Use"
 - fused lane with a non-empty `silenced` mask: done, README "Use"
 - `run_exp` end to end, 30 trials, sugar stimulus: total wall clock, and the
-  Brian2 figure it replaces (31 min, extrapolated from the measured 62.6 s per
-  trial and stated as such): done, 10.05 s, ROADMAP "Phase 1"
+  Brian2 figure it replaces: done, 10.05 s, ROADMAP "Phase 1". That Brian2 side
+  was re-measured on 2026-09-15 and corrected: 2.07 s per trial over a full
+  biological second, not 62.6, so the 30-trial comparison is about 77 s rather
+  than 31 min (README, "Results")
 
 ## Open points
 

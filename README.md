@@ -6,8 +6,8 @@
 
 The published Shiu et al. leaky integrate-and-fire model — all 127,400 FlyWire
 v630 neurons and 14,687,178 directed connections — runs at **0.29 seconds per
-biological second** on an M4 Pro, where the reference Brian2 implementation takes
-**62.6 s** on the same machine.
+biological second** on an M4 Pro, where the same model in Brian2 takes **2.07 s**
+on the same machine.
 
 ```bash
 uv venv --python 3.13 && uv pip install -e .
@@ -28,10 +28,11 @@ adds **86 s** for the compile and however long ~1.1 GB takes to download.
 ## What this is
 
 The [published model](https://www.biorxiv.org/content/10.1101/2023.05.02.539144v1)
-is a Brian2 program. Brian2 is a fine simulator, but a one-second run of the full
-brain takes about a minute, which makes sweeps and interactive work painful.
-This repository is the same model reimplemented so that a second of brain time
-costs less than a second of wall clock.
+is a Brian2 program. Brian2 is a fine simulator, and a one-second run of the full
+brain costs about two seconds there, so a standard 30-trial experiment runs over
+a minute and a sweep of them rather longer. This repository is the same model
+reimplemented so that a second of brain time costs a third of a second of wall
+clock.
 
 Nothing here is trained or learned. The 14.7 million connections come from
 FlyWire — real fly brains, sectioned, imaged under an electron microscope, every
@@ -157,7 +158,8 @@ see "How much to trust these".
 | this, dense MLX (eval per tick) | 22.02 (±0.356, n=3) | 326 MB | same session |
 | flyBrain MLX + metal_kernel | 3.241 | — | earlier session |
 | flyBrain MLX (dense scatter) | 40.62 | — | earlier session |
-| **Brian2 2.10.1 (the published model)** | **62.6** | — | earlier session |
+| **Brian2 2.10.1, cython (the published model)** | **2.07** (n=3 processes) | 3,140 MB | 2026-09-15 |
+| Brian2 2.10.1, numpy | 8.38 | 3,158 MB | 2026-09-15 |
 
 Reproduce the rows for this repository with:
 
@@ -171,10 +173,27 @@ All four produce a bit-identical spike-count SHA-256.
 
 Read the comparisons carefully:
 
-- **vs. Brian2 (~213×)** is the number that matters. Same model, same machine.
-  It is a lower bound: the Brian2 figure was measured over 200 ticks with the
-  network barely active, and Brian2 slows down as activity rises while these
-  lanes do not.
+- **vs. Brian2 (~7×)** is the number that matters. Same model, same machine, both
+  over a full biological second. This replaces a **~213×** published here until
+  2026-09-15, which was wrong. That figure came from a Brian2 time extrapolated
+  from a 200-tick run, and `net.run` carries a fixed cost that does not shrink
+  with the run: divided by 0.02 biological s it is inflated about thirtyfold.
+  Measured with the same script, Brian2 gives 7.9 s per biological second at 200
+  ticks, 2.5 at 2,000 and 2.07 at 10,000. The old text also called it a lower
+  bound on the grounds that the network was barely active; that is backwards, as
+  the short run overstated the cost rather than understating it.
+
+  Brian2's code generation target matters as much as the duration: 2.07 s with
+  cython, 8.38 s with numpy, so ~7× or ~29× depending on whether a compiler is
+  available, and a Brian2 figure quoted without its target is not reproducible.
+  Both were measured with `python tools/bench_brian2.py --ticks 10000`, which
+  runs upstream's own `model.py` on the same 21 sugar GRNs at 150 Hz and times
+  `net.run` alone; three fresh processes agreed within 0.01 s, and Brian2's
+  13,448 to 14,239 spikes match this engine's 13,594 on the same drive, so the
+  two are doing the same work. The comparison is still not quite fair to Brian2:
+  it records every spike time in a `SpikeMonitor` while these lanes are timed
+  without recording, which costs the fused lane +13.7 % on this drive (see
+  [Use](#use)), so the honest margin is nearer 6×.
 - **vs. flyBrain (~22 %)** is a narrow win over a small, young project, and it
   costs 7× the memory, most of it work that `async_eval` has scheduled and not
   yet finished: with a blocking `eval` the same run peaks at 273 MB (see
@@ -402,7 +421,8 @@ it ([Correctness](#correctness)). Only `t_run`, `n_run`, `r_poi` and `r_poi2` ca
 change; the model constants are compiled in. Trial `n` draws its input with
 `seed + n`, so experiments with the same seed and `neu_exc` share their input
 spike trains. 30 trials of 1 s with the sugar drive take 10.05 s end to end
-(ROADMAP, "Phase 1"), against 31 min extrapolated for Brian2 on one core.
+(ROADMAP, "Phase 1"), against about 77 s extrapolated for Brian2 on one core,
+which rebuilds the network for every trial.
 
 On the MaleCNS pack, names need no dict. `python -m lif.compile_pack_malecns`
 writes the annotation table's `type`, `instance`, `class` and `flywireType` next
