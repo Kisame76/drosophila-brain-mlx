@@ -1,8 +1,8 @@
 # Experiment layer: `run_exp` compatible with the published model
 
 Date: 2026-09-14. Status: silencing implemented ("Silencing", tests 5 and 6);
-spike-event recording implemented ("Spike-event recording", tests 1 to 4 and 7),
-its overhead not yet measured; the two-rate stimulus and `run_exp` not yet.
+spike-event recording implemented and its overhead measured ("Spike-event
+recording", tests 1 to 4 and 7); the two-rate stimulus and `run_exp` not yet.
 Implements phase 1 of [ROADMAP.md](../../ROADMAP.md).
 
 ## Goal
@@ -114,9 +114,15 @@ reads them, the event buffer is zero-filled, and the host reads back `count` and
 the events used. The estimate that stood here counted only the read, and put it
 at single-digit percent, down from a first 28 % that came from a per-dispatch
 cost model measurement later disproved (docs/mlx-notes.md §3). The copy and the
-fill were not in it, so the overhead is measured rather than estimated; the
-number goes into the README next to the fused-lane row as `record=True`
-overhead.
+fill were not in it, and on the sparse drive the result is not single-digit.
+Measured 2026-09-14, fused lane, recording on and off interleaved in one process
+per pack, median of 7 (table in README, "Use"): +13.7 % on FlyWire with the
+sugar drive, +4.3 % with the hub drive, +3.8 % on MaleCNS with the hub drive.
+The added time is 0.046 to 0.053 s per biological second in all three although
+the hub drives fire 2.7 to 2.9 times as many spikes per tick, so it is a cost per
+chunk, not per spike. Recording also lowers the FlyWire peak (669 → 380 MB on
+the sugar drive): the lane waits for the previous chunk before encoding the
+next, so less scheduled work is in flight.
 
 ### Host side
 
@@ -391,7 +397,8 @@ the full pack.
 
 ## Measurements to add to the README
 
-- fused lane with `record=True`, s per biological second and peak memory
+- fused lane with `record=True`, s per biological second and peak memory: done,
+  README "Use"
 - fused lane with a non-empty `silenced` mask: done, README "Use"
 - `run_exp` end to end, 30 trials, sugar stimulus: total wall clock, and the
   Brian2 figure it replaces (31 min, extrapolated from the measured 62.6 s per
