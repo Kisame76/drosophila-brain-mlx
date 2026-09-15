@@ -156,8 +156,6 @@ see "How much to trust these".
 | this, sparse Metal kernel | 0.7491 (±0.0182, n=3) | 265 MB | same session |
 | this, dense MLX (chunked) | 19.55 (±0.518, n=3) | 834 MB | same session |
 | this, dense MLX (eval per tick) | 22.02 (±0.356, n=3) | 326 MB | same session |
-| flyBrain MLX + metal_kernel | 3.241 | — | earlier session |
-| flyBrain MLX (dense scatter) | 40.62 | — | earlier session |
 | **Brian2 2.10.1, cython (the published model)** | **2.07** (n=3 processes) | 3,140 MB | 2026-09-15 |
 | Brian2 2.10.1, numpy | 8.38 | 3,158 MB | 2026-09-15 |
 
@@ -192,14 +190,21 @@ Read the comparisons carefully:
   13,448 to 14,239 spikes match this engine's 13,594 on the same drive, so the
   two are doing the same work. The comparison is still not quite fair to Brian2:
   it records every spike time in a `SpikeMonitor` while these lanes are timed
-  without recording, which costs the fused lane +13.7 % on this drive (see
-  [Use](#use)), so the honest margin is nearer 6×.
+  without recording. Measured on 2026-09-15, recording on and off interleaved
+  over seven repetitions, that costs the fused lane **+12.3 %**, 0.2949 against
+  0.3313 s per biological second — and the record-off figure landing 0.4 % from
+  the benchmark's 0.2937 is what makes the pair worth quoting. Against 0.3313 the
+  margin is **6.2×**.
 - **vs. flyBrain (~22 %)** is a narrow win over a small, young project, and it
   costs 7× the memory, most of it work that `async_eval` has scheduled and not
   yet finished: with a blocking `eval` the same run peaks at 273 MB (see
   [Use](#use)). Their engine also processes more spikes in this run
   because its refractory semantics differ (see below); at equal spike counts the
-  margin is smaller, and under CPU load it falls to ~10 % (below).
+  margin is smaller, and under CPU load it falls to ~10 % (below). Two further
+  rows, for flyBrain's own MLX lanes at 3.241 and 40.62, were dropped from the
+  table on 2026-09-15: they came from an earlier session and were never
+  re-measured, and after the Brian2 figure turned out to be wrong for exactly
+  that reason, an unverified number is not worth the space it takes.
 
 ### How much to trust these
 
@@ -450,6 +455,12 @@ these"), so compare within a row, not with the table at the top:
 | FlyWire, 21 sugar GRNs, 10,000, `edge_split` 1 | 0.3361 | 0.3821 | +13.7 % | 669 → 380 MB |
 | FlyWire, 100 hubs, 2,000, `edge_split` 8 | 1.2355 | 1.2882 | +4.3 % | 685 → 380 MB |
 | MaleCNS, 100 hubs, 2,000, `edge_split` 8 | 1.3624 | 1.4142 | +3.8 % | 434 → 435 MB |
+
+The sugar row was re-measured on an idle machine on 2026-09-15, the same way and
+also a median of 7: 0.2949 without recording against 0.3313 with it, **+12.3 %**.
+That is the figure the Brian2 comparison uses, because it and the 0.2937 it sits
+next to come from the same session; the +13.7 % above was measured under the load
+described, which raises both halves of the row.
 
 The added time is nearly the same in every row, 0.046 to 0.053 s per biological
 second or 0.15 to 0.17 ms per 32-tick chunk, although the hub drives fire 2.7 to

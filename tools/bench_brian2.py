@@ -16,6 +16,15 @@ Spikes are reported as well. Brian2 slows down as activity rises, so a figure
 measured on a barely active network is a lower bound on the cost of a busy one,
 and a number quoted without its activity level means little.
 
+A whole-experiment total is deliberately not measured here. Upstream's `run_trial`
+rebuilds the network inside every trial and joblib gives each trial its own
+process, so its memory starts clean each time. Looping in one process instead
+accumulates 14.7 M-synapse networks: tried on 2026-09-15 it reached 5.9 GB
+resident and was still climbing after six minutes, with the timings degrading
+along with it, and it would not have measured upstream's cost anyway. The
+30-trial figure in the README is therefore 30 x (build + run) from the numbers
+this prints, and is labelled an extrapolation.
+
     python tools/bench_brian2.py --ticks 200
     python tools/bench_brian2.py --ticks 2000
 
