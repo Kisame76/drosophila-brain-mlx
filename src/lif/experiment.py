@@ -25,6 +25,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from lif import core, spike_record
+from lif import names as lif_names
 from lif.compile_pack import sha256_file
 
 METADATA_KEY = b"mlx_lif_engine"
@@ -286,14 +287,28 @@ def _check_source(pack: core.Pack, arg: str, path, source: str) -> None:
 
 
 def _resolve(pack: core.Pack, what: str, entries, names, index: dict) -> list[tuple[int, int]]:
-    """(dataset ID, model index) for every entry; every unknown one named at once."""
+    """(dataset ID, model index) for every entry; every unknown one named at once.
+
+    A name is looked up in names when they are given, where it must name one
+    neuron, and otherwise in the pack's names sidecar, where it selects every
+    neuron whose instance or, failing that, whose type it is (lif.names).
+    """
     by_name: dict[str, list[int]] | None = None
+    sidecar = None
     found, unknown = [], []
     for entry in entries:
+        if isinstance(entry, str) and names is None:
+            sidecar = sidecar or lif_names.load(pack)
+            if sidecar is None:
+                raise ValueError(f"{what} lists the name {entry!r}, and neither were names given "
+                                 f"nor does the {pack.manifest.get('dataset', 'unknown')} pack "
+                                 "have names to look it up")
+            selected = sidecar.select(entry)
+            if not selected:
+                unknown.append(entry)
+            found.extend((int(pack.neuron_ids[i]), i) for i in selected)
+            continue
         if isinstance(entry, str):
-            if names is None:
-                raise ValueError(f"{what} lists the name {entry!r}, and no names were given "
-                                 "to look it up")
             if by_name is None:
                 by_name = {}
                 for fid, name in names.items():

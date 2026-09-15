@@ -37,6 +37,7 @@ from pathlib import Path
 
 import numpy as np
 
+from lif import names
 from lif.compile_pack import (
     CheckLog,
     build_csr,
@@ -268,6 +269,28 @@ MALECNS_SEMANTICS = {
 }
 
 
+def add_names(pack_dir: Path, annot_path: Path, ids: np.ndarray) -> dict:
+    """Write the names sidecar of the neurons ids from the annotation table."""
+    from pyarrow import feather
+
+    table = feather.read_table(annot_path, columns=["bodyId", *names.COLUMNS])
+    return names.write_names(pack_dir, names.names_table(table, ids), source="annotations")
+
+
+def names_only(pack_dir: Path, annot_path: Path) -> int:
+    """Add the names sidecar to a compiled pack, from the annotation table it was compiled from."""
+    manifest = json.loads((pack_dir / "manifest.json").read_text())
+    recorded = manifest["sources"]["annotations"]["sha256"]
+    if sha256_file(annot_path) != recorded:
+        print(f"{annot_path} is not the annotation table {pack_dir} was compiled from "
+              f"(sha256 {recorded})", file=sys.stderr)
+        return 1
+    entry = add_names(pack_dir, annot_path, np.load(pack_dir / "neuron_ids.npy", allow_pickle=False))
+    print(f"names sidecar: {pack_dir / entry['file']}, {entry['rows']} rows, "
+          f"content sha256 {entry['sha256'][:16]}...")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     root = Path(__file__).resolve().parents[2]
@@ -276,7 +299,12 @@ def main() -> int:
     ap.add_argument("--neurotransmitters", type=Path, default=raw / SOURCE_FILES["neurotransmitters"])
     ap.add_argument("--connectivity", type=Path, default=raw / SOURCE_FILES["connectivity"])
     ap.add_argument("--out", type=Path, default=root / "data/pack/male_cns_v1")
+    ap.add_argument("--names-only", action="store_true",
+                    help="only add the names sidecar to the pack already at --out")
     args = ap.parse_args()
+
+    if args.names_only:
+        return names_only(args.out, args.annotations)
 
     for path in (args.annotations, args.neurotransmitters, args.connectivity):
         if not path.is_file():
@@ -329,6 +357,8 @@ def main() -> int:
     )
     manifest["license"] = LICENSE
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    entry = add_names(args.out, args.annotations, ids)
+    print(f"\n>>> names sidecar: {entry['rows']} rows, content sha256 {entry['sha256'][:16]}...")
 
     total = sum(e["bytes"] for e in manifest["arrays"].values())
     print(f"\n>>> ALL CHECKS PASSED. pack written: {manifest['neurons']} neurons, "

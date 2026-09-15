@@ -103,6 +103,7 @@ class Pack:
     neuron_ids: np.ndarray   # int64[N], host-side only
     out_degree: np.ndarray   # int32[N], host-side only
     manifest: dict
+    path: Path | None = None  # the directory it was loaded from, where its sidecars are
 
 
 def load_pack(pack_dir: Path = PACK_DIR, verify_hashes: bool = True) -> Pack:
@@ -138,6 +139,7 @@ def load_pack(pack_dir: Path = PACK_DIR, verify_hashes: bool = True) -> Pack:
         neuron_ids=arrays["neuron_ids"],
         out_degree=out_degree,
         manifest=manifest,
+        path=Path(pack_dir),
     )
 
 
