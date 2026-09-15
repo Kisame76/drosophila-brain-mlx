@@ -31,10 +31,12 @@ wiring MN9 fires at 67.30 Hz. On a copy of the connectome in which every neuron
 keeps its number of incoming and outgoing connections and the signs and sizes of
 its outgoing synapses, but each connection goes to a random target, MN9 fires no
 spike at all, and 96 neurons fire at all against 408 on the real wiring. Both
-runs get the same input spikes. In this run it is the wiring, not the degrees or
-the signs, that carries the sugar signal to MN9; one shuffle (seed 0) has been
-run so far. Every bar is counted from recorded spikes, and these two commands
-rebuild the shuffled pack and the plot:
+runs get the same input spikes. The plot shows shuffle seed 0; four more
+shuffles (seeds 1 to 4) leave MN9 silent as well, with 89 to 99 neurons firing
+at all. In these runs it is the wiring, not the degrees or the signs, that
+carries the sugar signal to MN9. Every bar is counted from recorded spikes, and
+these two commands rebuild the shuffled pack and the plot; `--seed N` and
+`--shuffled data/pack/v630-shuffled-seedN --out other.svg` run another shuffle:
 
 ```bash
 python -m lif.shuffle_pack --pack data/pack/v630 --seed 0

@@ -28,8 +28,8 @@ fired in which tick (`record=True`), and `lif.experiment.run_exp` runs the
 published model's experiments with upstream's arguments and parquet format, which
 upstream's `get_rate` reads unchanged. One standard experiment, 30
 trials of 1 s, takes 10.05 s end to end. With the sugar GRNs driven at 100 Hz, MN9
-fires at 67.30 Hz on the real connectome and not once on a copy whose wiring is shuffled
-with every neuron's degrees kept (phase 3, the control demo).
+fires at 67.30 Hz on the real connectome and not once on any of five copies whose wiring
+is shuffled with every neuron's degrees kept (phase 3, the control demo).
 
 ## Phase 0: MaleCNS pack (done)
 
@@ -138,7 +138,9 @@ Ordered by how much each shows per unit of work.
    `python -m lif.control_demo`, the sugar GRNs driven at 100 Hz for 30 trials of
    1 s, the same input spikes on both: MN9 fires at 67.30 Hz on the real
    connectome and not once on the shuffled one (seed 0), where 96 neurons fire at
-   all against 408 on the real one. One shuffle seed so far.
+   all against 408 on the real one. Measured the same way on 2026-09-15, four
+   more shuffles (seeds 1 to 4) leave MN9 silent too, with 89 to 99 neurons
+   firing and 73,735 to 74,342 spikes in all, against 290,963 on the real one.
 
    Why a control and not a fly playing a game: after the MaleCNS v1.0 paper
    (Cell, 2026-09-03), dozens of projects wired the connectome to games and
@@ -152,7 +154,8 @@ Ordered by how much each shows per unit of work.
    What it took: `python -m lif.shuffle_pack` builds the shuffled pack, marked
    in its manifest as not the real connectome (v630, seed 0: 6 repair rounds,
    289 self-loops, and 90,491 of its 14,687,178 edges where the real pack has one
-   too); `python -m lif.control_demo` runs both packs through `run_exp` and
+   too; seeds 1 to 4: 6 repair rounds each, 257 to 288 self-loops, 90,402 to
+   90,720 shared edges); `python -m lif.control_demo` runs both packs through `run_exp` and
    writes [docs/figures/control-demo.svg](docs/figures/control-demo.svg); MN9's
    ID, 720575940660219265, is the one in upstream's notebook and is in the v630
    pack. The plot is **in the README**, near the top, because a table of
