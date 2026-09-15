@@ -127,19 +127,34 @@ neurons can be addressed as `"MN9"` rather than by a 19-digit ID.
 
 Ordered by how much each shows per unit of work.
 
-1. **Rate over time** for chosen neurons: with spike events recorded, this is a
-   histogram. A plotting script (matplotlib, optional dependency) that shows,
-   for example, sugar input at 0 ms and the proboscis motor neuron responding.
-   Every point on that plot is a measured spike.
+1. **The control demo: does the wiring matter?** Next after phase 1, ahead of
+   phase 2. Drive the 21 sugar GRNs as upstream's example notebook does and read
+   out MN9, the proboscis motor neuron that notebook reports, twice: once on the
+   real connectome, once on a shuffled one that keeps every neuron's number of
+   incoming and outgoing connections but wires them at random. Both shown side by
+   side as rate over time, a histogram of the recorded spike events, so every
+   point on the plot is a measured spike. The expectation, not yet measured, is
+   that only the real connectome makes MN9 respond. If the shuffled one responds
+   as well, that is the result, and it is published the same way.
 
-   The finished plot belongs **in the README**, near the top. The repository
-   currently opens with a table of milliseconds, which persuades someone who
-   already knows what the model is and nobody else. One curve showing sugar
-   going in and a motor neuron firing 40 ms later is the same claim in a form a
-   reader can check at a glance, and unlike a rendered fly it is made entirely
-   of measured spikes with nothing engineered in between. Committed as a
-   checked-in PNG or SVG plus the script that regenerates it, so it can be
-   re-derived rather than trusted.
+   Why a control and not a fly playing a game: after the MaleCNS v1.0 paper
+   (Cell, 2026-09-03), dozens of projects wired the connectome to games and
+   videos went viral ([awesome-fly](https://github.com/cobanov/awesome-fly)
+   lists them). Their performance comes from hand-made mappings between screen,
+   neurons and keys, from trained decoders or from trained weights, and hardly
+   any compares against a baseline that would show the connectome contributes
+   anything. This repository can run that comparison on a simulation that is
+   parity-gated against the published model.
+
+   What it needs: a shuffled pack, marked in its manifest as not the real
+   connectome; a script that runs both packs through `run_exp` and plots the
+   result; and the MN9 ID from upstream's notebook. The finished plot belongs
+   **in the README**, near the top. The repository currently opens with a table
+   of milliseconds, which persuades someone who already knows what the model is
+   and nobody else. Committed as a checked-in PNG or SVG plus the script that
+   regenerates it, so it can be re-derived rather than trusted. A 3D body scene
+   like flyBrain's can follow later, labelled with what in it is measured and
+   what is engineered.
 2. **Whole-brain activity film.** Needs 3D neuron coordinates, which neither
    pack carries today; the MaleCNS annotation table has `somaLocation` and that
    is the first thing to check. Deferred until a coordinate source exists, and
