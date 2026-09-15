@@ -148,11 +148,14 @@ Ordered by how much each shows per unit of work.
    real connectome, once on a shuffled one that keeps every neuron's number of
    incoming and outgoing connections but wires them at random. Both shown side by
    side as rate over time, a histogram of the recorded spike events, so every
-   point on the plot is a measured spike. Measured 2026-09-15 with
+   point on the plot is a measured spike, and below them the sugar GRNs' own rate,
+   so a silent MN9 cannot be mistaken for a run in which nothing happened.
+   Measured 2026-09-15 with
    `python -m lif.control_demo`, the sugar GRNs driven at 100 Hz for 30 trials of
    1 s, the same input spikes on both: MN9 fires at 67.30 Hz on the real
    connectome and not once on the shuffled one (seed 0), where 96 neurons fire at
-   all against 408 on the real one. Measured the same way on 2026-09-15, four
+   all against 408 on the real one, while the sugar GRNs fire at 99.38 Hz there
+   and 99.40 Hz on the real one. Measured the same way on 2026-09-15, four
    more shuffles (seeds 1 to 4) leave MN9 silent too, with 89 to 99 neurons
    firing and 73,735 to 74,342 spikes in all, against 290,963 on the real one.
 
