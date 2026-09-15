@@ -24,10 +24,10 @@ The engine runs the published Shiu et al. model at 0.29 s per biological second
 on an M4 Pro, parity-gated against Brian2, on FlyWire v630; MaleCNS v1.0 runs
 through the same four lanes. A run can drive chosen neurons at one or two rates
 (`core.make_stimulus_for`), silence others (`silenced=`) and record which neuron
-fired in which tick (`record=True`). What it cannot do yet is the rest of what the
-published model is *for*: run 30 trials and read out firing rates through
-upstream's `run_exp` and parquet format. Closing that gap is the rest of
-phase 1.
+fired in which tick (`record=True`), and `lif.experiment.run_exp` runs the
+published model's experiments with upstream's arguments and parquet format, which
+upstream's `get_rate` reads unchanged. What phase 1 still lacks is the end-to-end
+measurement of 30 trials.
 
 ## Phase 0: MaleCNS pack (done)
 
@@ -101,8 +101,11 @@ match in three of them, put up to 38 of 24,700 spikes on a different tick
 time, the most on the sparse sugar drive (README, "Use"). The two-rate stimulus
 (`core.make_stimulus_for`) is in as well. Upstream never makes its second input
 set refractory, at 0 Hz included, so a second set at 0 Hz changes a run as soon
-as one of its neurons fires (design doc, "Stimulus with two rates"). Next comes
-`run_exp` itself.
+as one of its neurons fires (design doc, "Stimulus with two rates"). `run_exp`
+and `rates` are in as well (`lif.experiment`): `rates` equals upstream's
+`get_rate` exactly on a file `run_exp` wrote, and `default_params` equals
+upstream's, evaluated with Brian2's units. What remains of phase 1 is measuring
+30 trials end to end.
 
 Design: [docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md)
 
