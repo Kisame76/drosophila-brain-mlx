@@ -47,7 +47,9 @@ python -m lif.control_demo
 
 ## Where the activity goes
 
-![Recorded spikes in the MaleCNS pack at their neurons' soma positions, brain at the top and ventral nerve cord below, while sugar-sensing neurons of the right labellum receive 100 Hz input; the view turns once over one second of biological time](docs/figures/activity-film.png)
+<p align="center">
+  <img src="docs/figures/activity-film.png" width="480" alt="Recorded spikes in the MaleCNS pack at their neurons' soma positions, brain at the top and ventral nerve cord below, while sugar-sensing neurons of the right labellum receive 100 Hz input; the view turns once over one second of biological time">
+</p>
 
 MaleCNS v1.0 covers the brain and the ventral nerve cord, and its annotation table
 gives most neurons a soma position, so a run on that pack can be watched in space.
