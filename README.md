@@ -20,6 +20,27 @@ Nothing here is trained or learned. The 14.7 million synapses come from FlyWire 
 real fly brains, sectioned, imaged under an electron microscope, every connection
 traced. The engine integrates membrane voltage through that fixed wiring.
 
+## Does the wiring matter?
+
+![MN9's firing rate over one second of sugar input: about 67 Hz on the FlyWire v630 wiring, silent on a shuffled copy with the same degrees](docs/figures/control-demo.svg)
+
+The 21 right sugar-sensing neurons get Poisson input at 100 Hz, as in the
+published model's example notebook, and the plot shows MN9, the proboscis motor
+neuron that notebook reads out, over 30 trials of one second. On the FlyWire
+wiring MN9 fires at 67.30 Hz. On a copy of the connectome in which every neuron
+keeps its number of incoming and outgoing connections and the signs and sizes of
+its outgoing synapses, but each connection goes to a random target, MN9 fires no
+spike at all, and 96 neurons fire at all against 408 on the real wiring. Both
+runs get the same input spikes. In this run it is the wiring, not the degrees or
+the signs, that carries the sugar signal to MN9; one shuffle (seed 0) has been
+run so far. Every bar is counted from recorded spikes, and these two commands
+rebuild the shuffled pack and the plot:
+
+```bash
+python -m lif.shuffle_pack --pack data/pack/v630 --seed 0
+python -m lif.control_demo
+```
+
 ## What this is not
 
 - **Not a new model.** The equations, constants and connectivity are Shiu et al.'s.
@@ -467,6 +488,7 @@ src/lif/
   compile_pack_malecns.py  MaleCNS v1.0 tables -> the same pack format
   verify_pack.py           independent audit of a written pack
   shuffle_pack.py          a pack with random wiring and the same degrees, as a control
+  control_demo.py          MN9 under the sugar drive on the real and the shuffled pack, as an SVG
   core.py                  constants, pack loader, stimulus, initial state
   experiment.py            run_exp and rates, compatible with the published model
   stimulus_flybrain.py     flyBrain's splitmix64 sugar-GRN stimulus

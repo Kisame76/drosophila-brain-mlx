@@ -27,7 +27,9 @@ through the same four lanes. A run can drive chosen neurons at one or two rates
 fired in which tick (`record=True`), and `lif.experiment.run_exp` runs the
 published model's experiments with upstream's arguments and parquet format, which
 upstream's `get_rate` reads unchanged. One standard experiment, 30
-trials of 1 s, takes 10.05 s end to end.
+trials of 1 s, takes 10.05 s end to end. With the sugar GRNs driven at 100 Hz, MN9
+fires at 67.30 Hz on the real connectome and not once on a copy whose wiring is shuffled
+with every neuron's degrees kept (phase 3, the control demo).
 
 ## Phase 0: MaleCNS pack (done)
 
@@ -132,9 +134,11 @@ Ordered by how much each shows per unit of work.
    real connectome, once on a shuffled one that keeps every neuron's number of
    incoming and outgoing connections but wires them at random. Both shown side by
    side as rate over time, a histogram of the recorded spike events, so every
-   point on the plot is a measured spike. The expectation, not yet measured, is
-   that only the real connectome makes MN9 respond. If the shuffled one responds
-   as well, that is the result, and it is published the same way.
+   point on the plot is a measured spike. Measured 2026-09-15 with
+   `python -m lif.control_demo`, the sugar GRNs driven at 100 Hz for 30 trials of
+   1 s, the same input spikes on both: MN9 fires at 67.30 Hz on the real
+   connectome and not once on the shuffled one (seed 0), where 96 neurons fire at
+   all against 408 on the real one. One shuffle seed so far.
 
    Why a control and not a fly playing a game: after the MaleCNS v1.0 paper
    (Cell, 2026-09-03), dozens of projects wired the connectome to games and
@@ -145,27 +149,27 @@ Ordered by how much each shows per unit of work.
    anything. This repository can run that comparison on a simulation that is
    parity-gated against the published model.
 
-   What it needs: a shuffled pack, marked in its manifest as not the real
-   connectome, which `python -m lif.shuffle_pack` now builds (v630, seed 0: 6
-   repair rounds, 289 self-loops, and 90,491 of its 14,687,178 edges where the
-   real pack has one too); a script that runs both packs through `run_exp` and
-   plots the result; and MN9's ID, 720575940660219265 in upstream's notebook,
-   which is in the v630 pack. The finished plot belongs
-   **in the README**, near the top. The repository currently opens with a table
-   of milliseconds, which persuades someone who already knows what the model is
-   and nobody else. Committed as a checked-in PNG or SVG plus the script that
-   regenerates it, so it can be re-derived rather than trusted. A 3D body scene
-   like flyBrain's can follow later, labelled with what in it is measured and
-   what is engineered.
+   What it took: `python -m lif.shuffle_pack` builds the shuffled pack, marked
+   in its manifest as not the real connectome (v630, seed 0: 6 repair rounds,
+   289 self-loops, and 90,491 of its 14,687,178 edges where the real pack has one
+   too); `python -m lif.control_demo` runs both packs through `run_exp` and
+   writes [docs/figures/control-demo.svg](docs/figures/control-demo.svg); MN9's
+   ID, 720575940660219265, is the one in upstream's notebook and is in the v630
+   pack. The plot is **in the README**, near the top, because a table of
+   milliseconds persuades someone who already knows what the model is and nobody
+   else. The SVG is checked in next to the script that regenerates it, so it can
+   be re-derived rather than trusted. A 3D body scene like flyBrain's can follow
+   later, labelled with what in it is measured and what is engineered.
 
-   Once the plot is in the README, and not before: add the repository to
+   Now that the plot is in the README: add the repository to
    [awesome-fly](https://github.com/cobanov/awesome-fly) under Brain Models, and
    post a case study of [docs/mlx-notes.md](docs/mlx-notes.md) in the GitHub
    Discussions of ml-explore/mlx. Both say what the repository is, what is
    measured and where its limits are, with no comparative claims. Independent of
-   the demo: report on philshiu/Drosophila_brain_model that its README says
-   silencing removes synapses "to and from" a neuron while model.py removes only
-   the outgoing ones.
+   the demo, reported as
+   [philshiu/Drosophila_brain_model#10](https://github.com/philshiu/Drosophila_brain_model/issues/10):
+   its README says silencing removes synapses "to and from" a neuron while
+   model.py removes only the outgoing ones.
 2. **Whole-brain activity film.** Needs 3D neuron coordinates, which neither
    pack carries today; the MaleCNS annotation table has `somaLocation` and that
    is the first thing to check. Deferred until a coordinate source exists, and
