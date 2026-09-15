@@ -496,8 +496,8 @@ Measured with 10 silenced neurons that never fire, against the same run without
 a mask, the fused lane moved −1.16 % on FlyWire with the sugar drive and +0.01 %
 on MaleCNS with the hub drive. The mask empties those neurons' edge ranges for
 the run rather than being tested in the kernel's early exit, which cost +36 % on
-MaleCNS; details in
-[docs/design/2026-09-14-experiment-layer.md](docs/design/2026-09-14-experiment-layer.md).
+MaleCNS at `edge_split` 8 (see "Things that did not work", and the measured table
+in `src/lif/engine_metal.py`).
 
 ## Correctness
 
