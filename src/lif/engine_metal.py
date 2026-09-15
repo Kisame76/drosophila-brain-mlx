@@ -78,8 +78,8 @@ EDGE_SPLIT_SPARSE = 2    # physiological drive, this lane (the fused lane wants 
 #
 # At K=8, a nested `if` or a ternary on the range end cost what `||` did. The
 # range end is read after the exit, in place of row_ptr[i + 1], and only by
-# threads whose source spiked. Details: docs/design/2026-09-14-experiment-layer.md,
-# "Silencing".
+# threads whose source spiked. README, "Things that did not work", has the short
+# version.
 _SRC = """
     uint gid = thread_position_in_grid.x;
     uint i = gid / EDGE_SPLIT;

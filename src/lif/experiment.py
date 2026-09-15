@@ -5,7 +5,7 @@ Poisson input on neu_exc at r_poi and on neu_exc2 at r_poi2, the neurons of
 neu_slnc silenced, and writes one parquet row per spike. run_exp here takes the
 same arguments and writes the same columns, so upstream's load_exps and get_rate
 read its files unchanged. Trial n draws its input with seed + n and is one run of
-a lane with spike recording. Design: docs/design/2026-09-14-experiment-layer.md.
+a lane with spike recording.
 """
 
 from __future__ import annotations
