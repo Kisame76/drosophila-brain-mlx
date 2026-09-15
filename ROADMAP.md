@@ -229,6 +229,16 @@ Ordered by how much each shows per unit of work.
    table the pack was compiled from, once its sha256 matches the manifest, and the
    film is written by an APNG encoder of numpy and zlib, so it adds no dependency.
 
+   Checked 2026-09-15 with `python -m lif.stimulus_survey`, 30 trials of each of
+   eight stimuli at 100 Hz: only the film's makes the ventral nerve cord's share of
+   the spikes rise, from 28.6 % to 66.9 %, and 69 of the 85 neurons above 100 Hz at
+   its end are abdominal. Silencing the 2,156 abdominal VNC neurons keeps the share
+   at 25.1 to 29.9 %, and with the input switched off after 500 ms, 25 of the 30
+   trials go on firing between 2,518 and 3,514 VNC spikes in the last 100 ms, where
+   all 30 do with the input left on. So the film shows a self-sustained abdominal
+   state of this model that one stimulus of the eight sets off, and that a trial
+   either settles into or does not (README, "Where the activity goes").
+
 ## Phase 4: a body (conditional)
 
 Coupling to flybody, FlyGym or flyBrain's MuJoCo scene. What this repository
