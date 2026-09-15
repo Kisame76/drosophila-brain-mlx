@@ -30,7 +30,9 @@ upstream's `get_rate` reads unchanged. On the MaleCNS pack it takes cell types
 and instances as names, such as `"MN9"`. One standard experiment, 30
 trials of 1 s, takes 10.05 s end to end. With the sugar GRNs driven at 100 Hz, MN9
 fires at 67.30 Hz on the real connectome and not once on any of five copies whose wiring
-is shuffled with every neuron's degrees kept (phase 3, the control demo).
+is shuffled with every neuron's degrees kept (phase 3, the control demo). On the MaleCNS
+pack the spikes of such an experiment can be watched at their neurons' soma positions
+(phase 3, the activity film).
 
 ## Phase 0: MaleCNS pack (done)
 
@@ -193,10 +195,25 @@ Ordered by how much each shows per unit of work.
    [philshiu/Drosophila_brain_model#10](https://github.com/philshiu/Drosophila_brain_model/issues/10):
    its README says silencing removes synapses "to and from" a neuron while
    model.py removes only the outgoing ones.
-2. **Whole-brain activity film.** Needs 3D neuron coordinates, which neither
-   pack carries today; the MaleCNS annotation table has `somaLocation` and that
-   is the first thing to check. Deferred until a coordinate source exists, and
-   when built it is labelled as visualization, not evidence.
+2. **Whole-brain activity film.** The coordinate source to check was the MaleCNS
+   annotation table's `somaLocation`, and it serves: it places 139,662 of the
+   pack's 166,700 neurons, and of the 27,038 it does not, 17,907 are sensory
+   neurons, 8,348 are intrinsic to the optic lobe and 783 are others.
+   `python -m lif.activity_film` drives the 17 LB3b and LB3c neurons of the right
+   labellum, which Tastekin et al. (2025) match to Gr64f-GAL4 neurons, at 100 Hz
+   for 30 trials of 1 s, and draws every recorded spike at its neuron's soma
+   position in [docs/figures/activity-film.png](docs/figures/activity-film.png), an
+   animated PNG of 100 frames of 10 ms during which the view turns once about the
+   CNS's long axis. Measured 2026-09-15, seed 0: 1,036,265 spikes from 5,021
+   neurons, 4,957 of them drawn; neurons of the ventral nerve cord's superclasses
+   fire 28.6 % of the spikes in the first 100 ms and 66.9 % in the last; MN9_L
+   fires at 52.97 Hz and MN9_R at 0.20 Hz. The README shows it under "Where the
+   activity goes", labelled as visualization, not evidence, because the constants
+   were fitted to the FlyWire brain.
+
+   What it took: no new pack data. The positions are read from the annotation
+   table the pack was compiled from, once its sha256 matches the manifest, and the
+   film is written by an APNG encoder of numpy and zlib, so it adds no dependency.
 
 ## Phase 4: a body (conditional)
 
