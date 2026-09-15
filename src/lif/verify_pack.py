@@ -244,6 +244,30 @@ def main() -> int:
         r("manifest", f"source {key}", sha256_file(path) == meta["sha256"],
           f"{meta['bytes']} bytes, {meta['sha256'][:24]}...")
 
+    # ---- 1b. names sidecar, re-derived from the annotation table ----------
+    sidecar = manifest.get("sidecars", {}).get("names")
+    if sidecar is not None:
+        import pyarrow.parquet as pq
+        from pyarrow import feather
+
+        from lif.names import COLUMNS, content_sha256
+
+        table = pq.read_table(args.pack / sidecar["file"])
+        r("names", "sidecar content sha256", content_sha256(table) == sidecar["sha256"],
+          sidecar["sha256"][:24] + "...")
+        annot = feather.read_table(args.annotations, columns=["bodyId", *COLUMNS])
+        row_of = {b: i for i, b in enumerate(annot["bodyId"].to_pylist())}
+        ids = arrays["neuron_ids"].tolist()
+        rows = [row_of.get(b) for b in ids]
+        r("names", "every neuron has an annotation row", None not in rows,
+          f"{sum(i is None for i in rows)} of {len(ids)} without")
+        same = table["bodyId"].to_pylist() == ids
+        for c in COLUMNS:
+            column = annot[c].to_pylist()
+            same = same and table[c].to_pylist() == [None if i is None else column[i] for i in rows]
+        r("names", "sidecar equals the annotations in pack order", same,
+          f"{len(ids)} rows by a dict on bodyId, columns {', '.join(COLUMNS)}")
+
     neuron_ids = arrays["neuron_ids"]
     row_ptr = arrays["row_ptr"]
     dest = arrays["destinations"]
