@@ -1,3 +1,10 @@
+# Named explicitly rather than left to PEP 517's legacy fallback, which is
+# `setuptools>=40.8.0` plus setup.py -- a floor from 2019 that predates this
+# project's own Python floor.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 # The distribution name stays `mlx-lif-engine` although the repository and the
 # README are `drosophila-brain-mlx`, and the import package is `lif`. Renaming it
