@@ -431,6 +431,19 @@ def write_pack(
     semantics: dict | None = None,
 ) -> dict:
     if out_dir.exists():
+        # This replaces the output directory wholesale, and both compilers pass
+        # --out through unexamined: `--out data/pack` rather than data/pack/v630
+        # is one keystroke away and would take every compiled pack under it with
+        # no way back. Only something that is already a pack may be replaced.
+        # shuffle_pack.write_shuffled_pack keeps its own, stricter form of this
+        # check -- there the target must be a *shuffled* pack.
+        try:
+            existing = json.loads((out_dir / "manifest.json").read_text())
+        except (OSError, ValueError):
+            existing = None
+        if not (isinstance(existing, dict)
+                and existing.get("pack_format") == "source-major-csr/1"):
+            raise ValueError(f"{out_dir} exists and is not a pack, refusing to replace it")
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
 
