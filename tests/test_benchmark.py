@@ -67,6 +67,27 @@ def test_results_file_keeps_the_wall_clock_seconds_of_every_run(tmp_path, monkey
             min(lane["run_seconds"]) / results["ticks"] * 10_000)
 
 
+@pytest.mark.parametrize("args", [["--ticks", "0"], ["--repeat", "0"], ["--repeat", "-1"]])
+def test_a_run_length_below_one_is_refused_before_the_pack_is_read(args, tmp_path, monkeypatch):
+    """--repeat 0 used to reach `ref = r` with the loop never entered and
+    --ticks 0 the `best / ticks` division, both as a traceback and both only
+    after the 114 MB pack had been loaded."""
+    def refuse(*a, **kw):
+        raise AssertionError("the pack was loaded before the arguments were checked")
+
+    monkeypatch.setattr(benchmark.core, "load_pack", refuse)
+    with pytest.raises(SystemExit) as excinfo:
+        run_benchmark(tmp_path, monkeypatch, *args)
+    assert "1 or more" in str(excinfo.value)
+
+
+def test_results_go_to_the_repository_by_default_wherever_it_is_run_from():
+    """Every other entry point anchors its defaults to the repository root; this
+    one wrote bench/results.json relative to the shell's directory and reported
+    the repository path it had not written."""
+    assert benchmark.DEFAULT_OUT == core.PACK_DIR.parents[2] / "bench" / "results.json"
+
+
 def test_quick_and_ticks_cannot_be_combined(tmp_path, monkeypatch):
     """--quick used to override --ticks without a word."""
     with pytest.raises(SystemExit) as excinfo:
