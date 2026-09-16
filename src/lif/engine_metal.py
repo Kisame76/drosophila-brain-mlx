@@ -97,6 +97,13 @@ _kernels: dict = {}
 
 
 def _kernel_for(split: int):
+    # propagate() dispatches n_neurons * split threads. A split of 0 dispatches
+    # none of them, which is not an error anywhere in MLX or Metal: the output
+    # comes back as its zero init_value and the lane returns a complete result
+    # for a network in which no synapse fired. Refuse it here, the one place
+    # both kernel lanes pass through, rather than in each run().
+    if split < 1:
+        raise ValueError(f"edge_split must be at least 1, got {split}")
     if split not in _kernels:
         _kernels[split] = mx.fast.metal_kernel(
             name=f"csr_propagate_sparse_k{split}",
@@ -175,6 +182,14 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         cap: int = spike_record.CAP) -> RunResult:
     """record=True also returns the spike events, extracted on the device once per
     chunk (lif.spike_record); cap is the most events one chunk may produce."""
+    # See engine_chunked.run: a non-positive chunk hangs the tick loop, a
+    # negative warmup reaches mx.stack with nothing to stack. split is checked
+    # in _kernel_for, which every tick goes through.
+    if chunk < 1:
+        raise ValueError(f"chunk must be at least 1, got {chunk}")
+    if warmup < 0:
+        raise ValueError(f"warmup must be 0 or more, got {warmup}")
+
     row_end = silenced_row_end(pack, core.silenced_mask(pack, silenced))
     c = {k: mx.array(v) for k, v in core.constants_f32().items()}
     targets = mx.array(stim.targets)

@@ -113,6 +113,11 @@ def tick(state: dict, pack: core.Pack, signed_counts: mx.array, c: dict,
 
 def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None,
         warmup: int = 50, record: bool = False) -> RunResult:
+    # range(min(warmup, n)) would read a negative warmup as 0. The other lanes
+    # raise on it; warmup means the same thing in every lane or it means nothing.
+    if warmup < 0:
+        raise ValueError(f"warmup must be 0 or more, got {warmup}")
+
     # Silencing as data: every edge of a silenced source carries a zero count,
     # computed once per run. The kernel lanes implement the same semantics as an
     # early exit instead; that the two mechanisms agree is what the silencing
