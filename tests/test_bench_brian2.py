@@ -51,6 +51,24 @@ def test_an_already_imported_joblib_is_left_alone(clean_joblib):
     assert sys.modules["joblib"] is sentinel
 
 
+def test_the_provenance_line_names_the_target_that_will_run():
+    """The whole point of the line is to make the number attributable, and the
+    default pref is the literal string 'auto', which attributes it to nothing."""
+    pytest.importorskip("brian2")
+    from brian2 import prefs
+
+    assert prefs.codegen.target == "auto", "unset default; the resolution is what matters"
+    resolved = bench_brian2.resolved_target()
+    assert resolved != "auto"
+    assert resolved.split(" -> ")[-1] in ("cython", "numpy")
+
+    prefs.codegen.target = "numpy"
+    try:
+        assert bench_brian2.resolved_target() == "numpy"
+    finally:
+        prefs.codegen.target = "auto"
+
+
 def test_peak_mb_reports_this_process_in_megabytes():
     mb = bench_brian2.peak_mb()
     assert 1 < mb < 1e6, f"{mb} MB is not a plausible resident size"
