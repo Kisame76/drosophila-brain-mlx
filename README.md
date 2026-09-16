@@ -293,7 +293,7 @@ rules are right.
 Requires macOS on Apple silicon and Python ≥ 3.11.
 
 ```bash
-uv venv --python 3.13 && uv pip install -e .
+uv venv --python 3.13 && uv pip install -e '.[dev]'   # [dev] is pytest, for the gates below
 ./tools/fetch_upstream.sh          # ~90 MB from philshiu/Drosophila_brain_model
 python -m lif.compile_pack         # builds data/pack/v630, ~114 MB
 ```
@@ -718,7 +718,8 @@ src/lif/
   validate_brian2.py       Brian2 vs ref64 vs MLX, spike counts and spike times
   validate_notebook.py     upstream's example notebook on this engine, against its published files
   benchmark.py             reproduces the results tables
-tests/                     parity, determinism and Brian2 spike-time gates, benchmark and stimulus checks
+tests/                     parity, determinism and Brian2 spike-time gates, benchmark,
+                           stimulus, pack-writing, pack-verification and argument-guard checks
 bench/results*.json        measured numbers, written by the benchmark
 tools/                     fetch scripts, demo.sh, the Brian2 and refractory-gate
                            measurements, flyBrain reference build

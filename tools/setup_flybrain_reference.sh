@@ -49,9 +49,13 @@ echo
 echo "The comparison row in the README is this, reading realtime_factor:"
 echo
 echo "  $WORK/flyBrain/target/release/flybrain-rs simulate --pack $WORK/pack_v630 \\"
-echo "      --steps 10000 --rate-hz 150 --seed 0 --chunk-steps 256"
+echo "      --steps 10000 --rate-hz 150 --seed 20260816 --chunk-steps 256"
 echo
-echo "Repeat it a few times and take the mean. A first run is not slower than the"
-echo "rest, so flyBrain pays its shader compilation outside that timing; measured"
-echo "2026-09-15, five runs gave 0.3771 s per biological second and 94 MB. The JSON"
-echo "names the stimulus it used, which is what makes the comparison matched."
+echo "20260816 is the seed lif.benchmark runs, so the two are comparable as printed;"
+echo "every flyBrain spike count in the README and in tools/refractory_gate.py is"
+echo "pinned to it. Repeat it a few times and take the mean. A first run is not"
+echo "slower than the rest, so flyBrain pays its shader compilation outside that"
+echo "timing; measured 2026-09-15, five runs gave 0.3781 s per biological second and"
+echo "94 MB, and it fires 16796 spikes. The timing hardly notices the seed -- at seed"
+echo "0 the same five runs gave 0.3771 -- but the spike count does. The JSON names"
+echo "the stimulus it used, which is what makes the comparison matched."

@@ -122,10 +122,12 @@ def load_pack(pack_dir: Path | str = PACK_DIR, verify_hashes: bool = True) -> Pa
     n = int(manifest["neurons"])
     e = int(manifest["edges"])
 
-    # The dense propagation needs a source index per edge. It is derivable from
+    # The dense propagation needs a source index per edge: engine_naive and
+    # engine_chunked read delayed[edge_src] once per edge. It is derivable from
     # row_ptr, so it is not stored in the pack -- but it costs another 4*E bytes
-    # of device memory at runtime. This is the price of source-major CSR under a
-    # scatter-add formulation; see PROJECT.md.
+    # of device memory at runtime, 59 MB on v630. This is the price of
+    # source-major CSR under a scatter-add formulation, and it is why the kernel
+    # lanes walk row_ptr in the kernel instead and never touch this array.
     out_degree = np.diff(row_ptr).astype(np.int32)
     edge_src = np.repeat(np.arange(n, dtype=np.int32), out_degree)
     assert edge_src.size == e
