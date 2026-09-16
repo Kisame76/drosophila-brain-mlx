@@ -8,6 +8,8 @@ as written, not sorted -- protocol.rs pushes indices in array order.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 RIGHT_SUGAR_GRN_IDS = [
@@ -34,6 +36,12 @@ def _splitmix64(value: np.ndarray) -> np.ndarray:
 def bernoulli(n_targets: int, steps: int, rate_hz: float, dt_ms: float,
               seed: int) -> np.ndarray:
     """Return a bool[steps, n_targets] draw matrix identical to the Rust engine."""
+    # Both checks are stimulus.rs's, in its order: a non-finite rate has to be
+    # refused before the product is taken, and a negative one would otherwise
+    # pass `probability > 1.0` and make every `uniform < probability` comparison
+    # False -- a drive of no spikes at all, reported as a successful run.
+    if not math.isfinite(rate_hz) or rate_hz < 0.0:
+        raise ValueError("stimulus rate must be finite and non-negative")
     probability = rate_hz * dt_ms / 1000.0
     if probability > 1.0:
         raise ValueError("rate x timestep cannot exceed one for N=1 input")
