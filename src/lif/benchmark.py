@@ -27,6 +27,11 @@ import numpy as np
 
 from lif import core, stimulus_flybrain
 
+# Absolute, like core.PACK_DIR: a default results file relative to the shell's
+# directory silently writes somewhere else when the benchmark is run from
+# anywhere but the repository root, while still printing this path.
+DEFAULT_OUT = Path(__file__).resolve().parents[2] / "bench" / "results.json"
+
 
 def _chip() -> str:
     try:
@@ -46,7 +51,7 @@ def main() -> int:
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--rate-hz", type=float, default=150.0)
     ap.add_argument("--seed", type=int, default=20260816)
-    ap.add_argument("--out", type=Path, default=Path("bench/results.json"))
+    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--pack", type=Path, default=core.PACK_DIR,
                     help="pack directory; defaults to the FlyWire v630 pack")
     ap.add_argument("--edge-split", type=int, default=None,
@@ -58,6 +63,12 @@ def main() -> int:
                          "hubs on any other dataset")
     args = ap.parse_args()
     ticks = 2000 if args.quick else args.ticks
+    # Before the pack load below: both of these used to surface as a traceback
+    # from the timing loop, after 114 MB had been read off disk.
+    if ticks < 1:
+        raise SystemExit("--ticks must be 1 or more")
+    if args.repeat < 1:
+        raise SystemExit("--repeat must be 1 or more")
 
     from lif import engine_chunked, engine_fused, engine_metal, engine_naive
 
