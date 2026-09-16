@@ -28,13 +28,21 @@ fetch "$BASE/results/example/sugarR-720575940622695448.parquet" "$RES/sugarR-720
 fetch "$BASE/results/example/sugarR.parquet"                    "$RES/sugarR.parquet"                    948526
 fetch "$BASE/results/example/sugarR_100Hz.parquet"              "$RES/sugarR_100Hz.parquet"              557849
 echo
-echo "expected sha256:"
-echo "  completeness_630.csv               e6b71e17671a9bdb05f55e4bc6774640a1418cb7a05125e0fc994ad40f9bfdfb"
-echo "  connectivity_630.parquet           94db8c650533bc36ffa3223f2e62325d5648b8d6bd31c3a4e1c804628c7557b3"
-echo "  example.ipynb                      1737c3043af700504c4791c4bfc02d1856bbeb0d36c469832e4b9399dfddda3a"
-echo "  sugarR-720575940617937543.parquet  e0d39699bd979a5761138dbab964dbfe1c55feb945349cd24bc1c1f9a925753b"
-echo "  sugarR-720575940621754367.parquet  f7d7cd7386663cbce864d6ca132ce5992d0cdb65f281b30768c3afe0804514a6"
-echo "  sugarR-720575940622695448.parquet  c6b5e102249e23c30989ad66ad897d81a6453681ba3756dd30c83e956aee803e"
-echo "  sugarR.parquet                     83921d50089d966785e402d6c0e3be5ab3eba5beb680410a09c557b0f22dcc28"
-echo "  sugarR_100Hz.parquet               93722ec03c3faa5a85790d77ed16bdd7f1e38a7c847ed0bc3af3dc2e4d0c3d34"
-shasum -a 256 "$RAW/completeness_630.csv" "$RAW/connectivity_630.parquet" "$REF/example.ipynb" "$RES"/*.parquet
+echo "sha256, against the bytes every figure in this repository was measured on:"
+(cd "$ROOT" && printf '%s\n' \
+  "e6b71e17671a9bdb05f55e4bc6774640a1418cb7a05125e0fc994ad40f9bfdfb  data/raw/completeness_630.csv" \
+  "94db8c650533bc36ffa3223f2e62325d5648b8d6bd31c3a4e1c804628c7557b3  data/raw/connectivity_630.parquet" \
+  "1737c3043af700504c4791c4bfc02d1856bbeb0d36c469832e4b9399dfddda3a  data/ref/example.ipynb" \
+  "e0d39699bd979a5761138dbab964dbfe1c55feb945349cd24bc1c1f9a925753b  data/ref/results/example/sugarR-720575940617937543.parquet" \
+  "f7d7cd7386663cbce864d6ca132ce5992d0cdb65f281b30768c3afe0804514a6  data/ref/results/example/sugarR-720575940621754367.parquet" \
+  "c6b5e102249e23c30989ad66ad897d81a6453681ba3756dd30c83e956aee803e  data/ref/results/example/sugarR-720575940622695448.parquet" \
+  "83921d50089d966785e402d6c0e3be5ab3eba5beb680410a09c557b0f22dcc28  data/ref/results/example/sugarR.parquet" \
+  "93722ec03c3faa5a85790d77ed16bdd7f1e38a7c847ed0bc3af3dc2e4d0c3d34  data/ref/results/example/sugarR_100Hz.parquet" \
+  | shasum -a 256 -c -) && exit 0
+# Not fatal, and nothing is deleted: upstream publishes from main, so a file may
+# legitimately have been republished since these digests were taken. But every
+# number in README.md was measured on the bytes above, so a run against anything
+# else is a different experiment and has to say so.
+echo
+echo "  A file above does not match. The figures in README.md were measured on the"
+echo "  recorded bytes; re-measure anything you quote, or fetch the recorded files."
