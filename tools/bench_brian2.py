@@ -50,6 +50,22 @@ def peak_mb() -> float:
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6
 
 
+def resolved_target() -> str:
+    """The codegen target Brian2 will actually use, for the provenance line.
+
+    prefs.codegen.target keeps whatever it was set to: Brian2 resolves 'auto'
+    inside auto_target() at code-object build time and never writes the answer
+    back. Printing the pref would therefore record the literal string 'auto' for
+    every default run, and cython and numpy differ by about 4x on this very
+    benchmark -- a figure whose target is unknown is not reproducible.
+    """
+    from brian2 import prefs
+    from brian2.devices.device import auto_target
+
+    target = prefs.codegen.target
+    return target if target != "auto" else f"auto -> {auto_target().class_name}"
+
+
 def stub_joblib() -> bool:
     """Stand in for joblib unless a real one is there, and say whether it did.
 
@@ -115,7 +131,7 @@ def main() -> int:
 
     from lif import stimulus_flybrain
 
-    print(f"Brian2 {brian2.__version__}, codegen target {prefs.codegen.target}, "
+    print(f"Brian2 {brian2.__version__}, codegen target {resolved_target()}, "
           f"dt {defaultclock.dt!s}")
     print(f"{args.ticks} ticks = {biological_s:g} biological s, "
           f"21 sugar GRNs at {args.rate:g} Hz, timed twice")
