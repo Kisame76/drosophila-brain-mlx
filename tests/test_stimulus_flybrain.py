@@ -93,3 +93,12 @@ def test_the_sugar_drive_makes_the_input_spike_count_the_benchmark_reports():
 def test_a_rate_that_would_need_more_than_one_draw_per_tick_is_refused():
     with pytest.raises(ValueError, match="cannot exceed one"):
         stimulus_flybrain.bernoulli(2, 10, 20_000.0, 0.1, 0)
+
+
+@pytest.mark.parametrize("rate_hz", [-150.0, float("nan"), float("inf")])
+def test_a_rate_that_is_not_a_finite_non_negative_number_is_refused(rate_hz):
+    """`uniform < probability` is False for all three, so an unguarded draw
+    matrix is silently all-False and the run looks like a run with no input.
+    stimulus.rs bails on exactly these, and so does core.make_stimulus_for."""
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        stimulus_flybrain.bernoulli(2, 10, rate_hz, 0.1, 0)
