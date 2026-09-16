@@ -99,6 +99,14 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         cap: int = spike_record.CAP) -> RunResult:
     """record=True also returns the spike events, extracted on the device once per
     chunk (lif.spike_record); cap is the most events one chunk may produce."""
+    # See engine_chunked.run: a non-positive chunk hangs the tick loop, a
+    # negative warmup reaches mx.stack with nothing to stack. edge_split is
+    # checked in engine_metal._kernel_for, which every tick goes through.
+    if chunk < 1:
+        raise ValueError(f"chunk must be at least 1, got {chunk}")
+    if warmup < 0:
+        raise ValueError(f"warmup must be 0 or more, got {warmup}")
+
     # Read by the propagation kernel only, as empty edge ranges, so a silenced
     # neuron still spikes and counts here.
     row_end = silenced_row_end(pack, core.silenced_mask(pack, silenced))

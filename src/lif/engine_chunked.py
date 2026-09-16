@@ -84,6 +84,15 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
     record=True also returns the spike events, extracted on the device once per
     chunk (lif.spike_record); cap is the most events one chunk may produce.
     """
+    # min(chunk, n - t) is the tick loop's step. At a chunk of 0 or less it is 0,
+    # the cursor never advances and the run hangs instead of failing. A negative
+    # warmup passes `if w:` below and then encodes an empty range, which reaches
+    # mx.stack with nothing to stack once record is on.
+    if chunk < 1:
+        raise ValueError(f"chunk must be at least 1, got {chunk}")
+    if warmup < 0:
+        raise ValueError(f"warmup must be 0 or more, got {warmup}")
+
     # Edges of silenced sources carry a zero count, once per run; see
     # engine_naive.run.
     signed_counts = pack.signed_counts
