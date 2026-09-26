@@ -314,8 +314,9 @@ differs from K=1 to K=8, because the whole thing is floor (§3), not work.
 per-row flag in the exit, `if (!active[i] || masked[i]) return;`, measured with
 no row active and the kernel dispatched on its own (127,400 rows): +0.9 % at
 K=1, +41 % at K=2, +59 % at K=4, +73 % at K=8, against the same kernel without
-the flag. In the engine at K=8 that was +29 % or +66 % of the whole step,
-depending on the stimulus. A nested `if` or a ternary on the row's end cost the
+the flag. In the fused lane at K=8 that was +29 % of the whole step on FlyWire
+with the hub drive, +66 % with the sugar drive and +36 % on MaleCNS with 100
+hubs. A nested `if` or a ternary on the row's end cost the
 same. Moving the flag into data read only after the exit, an end-of-row array in
 which a masked row ends where it starts, cost at most +2.5 % in the same runs,
 about what binding the flag without reading it cost (+2.0 %).
@@ -329,8 +330,8 @@ about what binding the flag without reading it cost (+2.0 %).
   dependency cost more than the smaller grid saved. Dense-with-early-exit is
   hard to beat when the early exit is two instructions.
 - **`mx.compile` with captured constants.** §5.
-- **Believing an explanation that was never measured.** I attributed the largest
-  win in this project to dispatch count for weeks. It was memory traffic. The
+- **Believing an explanation that was never measured.** I attributed the fusion
+  win in §2 to dispatch count for weeks. It was memory traffic. The
   microbenchmark in §2 and §3 took twenty minutes and would have said so on day
   one. Then I did it again: I blamed `mx.compile`'s divergence on FMA
   contraction, and a probe of a few lines (§5) shows it does not contract at

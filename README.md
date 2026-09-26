@@ -622,7 +622,7 @@ else. Getting from 22 s to 0.29 s was three findings, in order of size:
 
 The transferable findings, with the measurements behind them, are in
 [docs/mlx-notes.md](docs/mlx-notes.md): what to measure first, why fusing
-elementwise chains is the largest single win, why `eval` and not the dispatch is
+elementwise chains is the largest win after sparse propagation, why `eval` and not the dispatch is
 the unit of overhead, and the two limitations below in more detail.
 
 ## Two MLX limitations worth knowing
