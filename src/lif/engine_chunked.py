@@ -73,13 +73,14 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
     """Run the chunked lane.
 
     compile_body defaults to False because mx.compile BREAKS the parity gate.
-    It fuses the elementwise ops into one kernel where Metal applies FMA
-    contraction: mathematically equivalent, differently rounded in float32.
-    The drift is invisible for thousands of ticks, then tips a neuron across the
-    strict v > V_TH threshold and the trajectories diverge chaotically -- 54270
-    vs 52472 spikes at 10k ticks. MLX exposes no way to forbid the contraction.
-    It bought 4%; it is not worth an invalid result. Kept as an opt-in flag so
-    the effect stays reproducible.
+    It prints the scalar constants the body captures into the fused kernel's
+    source with 7 significant digits (ml-explore/mlx#4503), and decay_v and
+    v0_term come back 1 ulp off. The strict v > V_TH threshold turns that into a
+    different spike train: the first spike differs at tick 120, and at 10k ticks
+    the runs have 48308 vs 47499 (make_stimulus, seed 20260913). It is not FMA
+    contraction; the compiled kernel rounds a*b and + c separately. It bought 4%;
+    it is not worth an invalid result. Kept as an opt-in flag so the effect
+    stays reproducible.
 
     record=True also returns the spike events, extracted on the device once per
     chunk (lif.spike_record); cap is the most events one chunk may produce.

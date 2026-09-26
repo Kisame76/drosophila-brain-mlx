@@ -133,28 +133,64 @@ instruction. The *dispatch* stays dense and statically sized; only the memory
 traffic becomes sparse. That was enough to go from 19.6 s to 0.75 s, by far the
 largest single step in the project.
 
-## 5. `mx.compile` can break bit-reproducibility
+## 5. `mx.compile` can break bit-reproducibility, through its constants
 
 `mx.compile` fuses elementwise ops, which is exactly the fix in §2, and it gave
-+4 % here. It is also unusable in this project, and the reason is worth knowing.
++4 % here. It also changes results. With 100 hub neurons driven at 150 Hz (seed
+20260913), the first spike that differs comes at step 120, and at 10,000 steps
+the runs have 48,308 and 47,499 events. A strict comparison downstream
+(`if v > threshold`) turns any rounding difference into a different decision
+sooner or later. (An earlier version quoted 54,270 against 52,472 from a run
+whose stimulus is not recorded.)
 
-The fused kernel it generates lets Metal contract `a*b + c` into a fused
-multiply-add. FMA is more accurate and mathematically equivalent, and it rounds
-differently. With a strict comparison downstream (`if v > threshold`) that
-difference eventually flips a decision. Here: identical for 4,000 steps, then
-54,270 against 52,472 events at 10,000.
+I blamed FMA contraction, which was wrong: the second wrong explanation in this
+document, after §2's dispatch count. Measured over 2^20 random float32 triples,
+counting the 245,246 elements where the two roundings differ:
 
-MLX exposes no switch to disable contraction. Inside a hand-written kernel you
-control it:
+| `a*b + c` computed by | matches `fma(a, b, c)` | matches `a*b`, then `+ c` |
+|---|---|---|
+| MLX, eager (two kernels) | 0 | 245,246 |
+| `mx.compile` | 0 | 245,246 |
+| `mx.fast.metal_kernel`, one expression | 245,246 | 0 |
+| the same, with `#pragma clang fp contract(off)` | 0 | 245,246 |
+
+`mx.compile` does not contract. It emits every op as its own statement, and
+Metal, in the `safe` math mode MLX compiles with, contracted a multiply and an
+add written as one expression, the way a hand-written kernel writes them, but
+not across statements.
+
+The cause is the constants. `mx.compile` prints each scalar constant it captured,
+a closure array or a Python float, into the generated Metal source as a decimal
+literal with 7 significant digits (`digits10 + 1` in `print_float_constant`,
+`mlx/backend/common/compiled.h`). A float32 needs 9 to round-trip. Two of this
+model's eight constants do not survive:
+
+| constant | float32 value | literal in the kernel | parsed back |
+|---|---|---|---|
+| `decay_v` | 0.995012462 | 0.9950125 | 0.995012522, +1 ulp |
+| `v0_term` | −0.259351075 | −0.2593511 | −0.259351104, +1 ulp |
+
+Passing the same eight constants to the compiled function as arguments, so that
+they are read from buffers instead of printed, makes the compiled run
+bit-identical to the reference at 10,000 steps: the same spike-count SHA-256 and
+the same final `v` and `g`. This is MLX issue
+[#4503](https://github.com/ml-explore/mlx/issues/4503), and a fix is open as
+[#4511](https://github.com/ml-explore/mlx/pull/4511).
+
+**What to do.** If your result feeds a strict comparison, an equality, a hash, or
+anything where "close enough" is not enough, pass float constants to a compiled
+function as arguments rather than capturing them, at least until that fix is
+released. In a hand-written kernel, disable contraction if your reference rounds
+`a*b` and `+ c` separately:
 
 ```python
 mx.fast.metal_kernel(..., header="\n#pragma clang fp contract(off)\n")
 ```
 
-So: if your result feeds a strict comparison, an equality, a hash, or anything
-where "close enough" is not enough, `mx.compile` is off the table and a
-hand-written kernel is the way to get fusion. If you are producing floats a
-human will look at, use it.
+The fused lane here needs it: without the pragma its final `v` is no longer
+bit-identical and its spikes differ from step 6,729 on. `mx.fast.metal_kernel`
+also takes `compile_options={"math_mode": ...}`, but `safe`, the strictest of
+its three modes and the default, is the one that contracted above.
 
 Related: **Metal has no float64.** Not slow, absent. If you need to distinguish
 "my semantics are wrong" from "float32 rounded differently", you need a float64
@@ -275,11 +311,13 @@ about what binding the flag without reading it cost (+2.0 %).
   single dense-grid kernel with early exits. The extra kernel plus its
   dependency cost more than the smaller grid saved. Dense-with-early-exit is
   hard to beat when the early exit is two instructions.
-- **`mx.compile`.** §5.
+- **`mx.compile` with captured constants.** §5.
 - **Believing an explanation that was never measured.** I attributed the largest
   win in this project to dispatch count for weeks. It was memory traffic. The
   microbenchmark in §2 and §3 took twenty minutes and would have said so on day
-  one.
+  one. Then I did it again: I blamed `mx.compile`'s divergence on FMA
+  contraction, and a probe of a few lines (§5) shows it does not contract at
+  all.
 
 ## 10. Checklist
 
@@ -289,8 +327,9 @@ about what binding the flag without reading it cost (+2.0 %).
 3. Count the bytes your intermediates move. A chain of k elementwise ops on an
    N-element array moves about `2kN * itemsize` per step, and almost all of it
    is avoidable.
-4. Fuse the chain. `mx.compile` if approximate floats are fine, a hand-written
-   kernel if they are not.
+4. Fuse the chain, with `mx.compile` or a hand-written kernel. For bit-exact
+   results pass float constants to the compiled function as arguments, and
+   disable contraction in the kernel (§5).
 5. Anything with a data-dependent output shape needs a kernel, or needs to be
    done densely with an early exit. Try dense first; it is often enough.
 6. Accumulate in integers if the structure allows it, and you get determinism

@@ -15,11 +15,15 @@ dispatch per internal tick. This module does the same from MLX -- one kernel for
 propagation (atomics), one for everything else (no atomics), two dispatches
 total instead of ~16.
 
-FMA contraction is disabled explicitly. `mx.compile` broke bit-parity in phase 2
-precisely because Metal contracted `a*b + c` into a fused multiply-add, which is
-mathematically equivalent but rounds differently, and a strict `v > v_th`
-threshold turns that into a different spike train after enough ticks. The pragma
-below is what keeps this lane bit-identical to the reference lanes.
+FMA contraction is disabled explicitly. Metal contracts `a*b + c` written as one
+expression into a fused multiply-add, in the safe math mode MLX compiles with as
+well. That is mathematically equivalent but rounds differently from the reference
+lanes, which round the product and the sum separately, and a strict `v > v_th`
+threshold turns it into a different spike train: without the pragma below the
+final v is no longer bit-identical, and spikes differ from tick 6729 on
+(make_stimulus, seed 20260913, 10k ticks). The constants arrive as buffers, not
+as literals in the source, which also keeps this lane clear of the 7-digit
+constant literals that broke mx.compile's parity in phase 2 (engine_chunked.run).
 """
 
 from __future__ import annotations

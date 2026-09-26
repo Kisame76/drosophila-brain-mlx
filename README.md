@@ -627,13 +627,19 @@ the unit of overhead, and the two limitations below in more detail.
 
 ## Two MLX limitations worth knowing
 
-**`mx.compile` breaks bit-reproducibility.** It fuses elementwise ops into a
-kernel where Metal contracts `a*b + c` into a fused multiply-add — mathematically
-equivalent, differently rounded. With a strict threshold that eventually flips a
-spike: invisible for 4,000 ticks, then 54,270 vs 52,472 spikes at 10,000. MLX
-offers no switch to disable contraction, so `mx.compile` is unusable for any
-model with a strict threshold decision if you need reproducibility. Inside a
-hand-written kernel it *is* controllable — `#pragma clang fp contract(off)`.
+**`mx.compile` rounds its captured constants.** It prints every scalar float
+constant it captured into the fused kernel's source with 7 significant digits,
+where a float32 needs 9, and two of this model's constants, `decay_v` and
+`v0_term`, come back 1 ulp off
+([ml-explore/mlx#4503](https://github.com/ml-explore/mlx/issues/4503), fix open
+in [#4511](https://github.com/ml-explore/mlx/pull/4511)). With a strict threshold
+that eventually flips a spike: the first differs at tick 120, and at 10,000 ticks
+the runs have 48,308 vs 47,499 spikes (100 hubs, seed 20260913). Passed to the
+compiled function as arguments instead, the constants make it bit-identical.
+Until 2026-09-25 this README blamed FMA contraction, which was wrong:
+`mx.compile` emits every op as its own statement, and Metal does not contract
+across them. A hand-written kernel that writes `a*b + c` as one expression does
+get contracted, which is why the fused lane sets `#pragma clang fp contract(off)`.
 
 **There is no accumulating scatter.** MLX 0.32.2 has no `bincount`,
 `segment_sum`, `index_add` or public `scatter_add`, and `arr[idx] = vals` is
