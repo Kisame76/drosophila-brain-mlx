@@ -2,7 +2,7 @@
 
 Same semantics as engine_naive, three changes:
   - N ticks are encoded before a single mx.eval()
-  - the tick body can be fused with mx.compile (OFF by default: it breaks parity)
+  - the tick body can be fused with mx.compile (compile_body, off by default)
   - mx.async_eval lets the next chunk encode while the current one commits
 
 No Python control flow, no .item(), no host readback inside a chunk.
@@ -27,10 +27,14 @@ from lif import core, spike_record
 from lif.engine_naive import RunResult
 
 
-def make_step(pack: core.Pack, signed_counts: mx.array, c: dict, targets: mx.array):
-    """One tick. Identical arithmetic to engine_naive.tick, same order."""
+def make_step(pack: core.Pack, signed_counts: mx.array, targets: mx.array):
+    """One tick. Identical arithmetic to engine_naive.tick, same order.
 
-    def step(v, g, rfc, counts, rfc_reload, delayed, stim_row):
+    The float constants c are an argument, not a closure variable, so that under
+    mx.compile they stay buffers; see run.
+    """
+
+    def step(c, v, g, rfc, counts, rfc_reload, delayed, stim_row):
         # --- 1. refractory refresh, then the exact closed-form update.
         rfc = mx.maximum(rfc - 1, 0)
         not_ref = rfc == 0
@@ -72,15 +76,17 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         warmup: int = 50, record: bool = False, cap: int = spike_record.CAP) -> RunResult:
     """Run the chunked lane.
 
-    compile_body defaults to False because mx.compile BREAKS the parity gate.
-    It prints the scalar constants the body captures into the fused kernel's
-    source with 7 significant digits (ml-explore/mlx#4503), and decay_v and
-    v0_term come back 1 ulp off. The strict v > V_TH threshold turns that into a
-    different spike train: the first spike differs at tick 120, and at 10k ticks
-    the runs have 48308 vs 47499 (make_stimulus, seed 20260913). It is not FMA
-    contraction; the compiled kernel rounds a*b and + c separately. It bought 4%;
-    it is not worth an invalid result. Kept as an opt-in flag so the effect
-    stays reproducible.
+    compile_body fuses the tick's elementwise ops with mx.compile. The float
+    constants reach the compiled tick as its first argument, not through the
+    closure: mx.compile prints captured scalars into the kernel source with 7
+    significant digits (ml-explore/mlx#4503), and decay_v and v0_term do not
+    survive that. Captured, they came back 1 ulp off and broke the parity gate,
+    because the strict v > V_TH threshold turns any rounding difference into a
+    different spike train: the first spike differed at tick 120, and at 10k ticks
+    the runs had 48308 vs 47499 spikes (make_stimulus, seed 20260913). It was not
+    FMA contraction; the compiled kernel rounds a*b and + c separately. Phase 2
+    measured +4% from compiling. It stays off by default so that this lane
+    remains the unfused baseline lif.benchmark reports.
 
     record=True also returns the spike events, extracted on the device once per
     chunk (lif.spike_record); cap is the most events one chunk may produce.
@@ -105,7 +111,7 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
 
     c = {k: mx.array(v) for k, v in core.constants_f32().items()}
     targets = mx.array(stim.targets)
-    step = make_step(pack, signed_counts, c, targets)
+    step = make_step(pack, signed_counts, targets)
     if compile_body:
         step = mx.compile(step)
 
@@ -122,7 +128,7 @@ def run(pack: core.Pack, stim: core.Stimulus, silenced: np.ndarray | None = None
         rl = st["rfc_reload"]
         for t in range(t0, t0 + k):
             s = t % core.DELAY_TICKS
-            v, g, rfc, counts, spike = step(v, g, rfc, counts, rl, ring[s], stim.draws[t])
+            v, g, rfc, counts, spike = step(c, v, g, rfc, counts, rl, ring[s], stim.draws[t])
             ring[s] = spike  # read-then-overwrite: same slot, DELAY_TICKS apart
             if spikes is not None:
                 spikes.append(spike)

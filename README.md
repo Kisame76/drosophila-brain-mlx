@@ -635,7 +635,8 @@ where a float32 needs 9, and two of this model's constants, `decay_v` and
 in [#4511](https://github.com/ml-explore/mlx/pull/4511)). With a strict threshold
 that eventually flips a spike: the first differs at tick 120, and at 10,000 ticks
 the runs have 48,308 vs 47,499 spikes (100 hubs, seed 20260913). Passed to the
-compiled function as arguments instead, the constants make it bit-identical.
+compiled function as arguments instead, as the chunked lane's `compile_body=True`
+now does, the constants make it bit-identical.
 Until 2026-09-25 this README blamed FMA contraction, which was wrong:
 `mx.compile` emits every op as its own statement, and Metal does not contract
 across them. A hand-written kernel that writes `a*b + c` as one expression does

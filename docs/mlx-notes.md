@@ -193,7 +193,8 @@ the same final `v` and `g`. This is MLX issue
 **What to do.** If your result feeds a strict comparison, an equality, a hash, or
 anything where "close enough" is not enough, pass float constants to a compiled
 function as arguments rather than capturing them, at least until that fix is
-released. In a hand-written kernel, disable contraction if your reference rounds
+released. The chunked lane's `compile_body=True` does that now and passes the
+parity gate. In a hand-written kernel, disable contraction if your reference rounds
 `a*b` and `+ c` separately:
 
 ```python

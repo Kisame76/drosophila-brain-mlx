@@ -42,6 +42,10 @@ def run_lane(lane, pack, stim, silenced=None, **kw):
         "naive": lambda: engine_naive.run(pack, stim, silenced=silenced, warmup=0, **kw),
         "chunked": lambda: engine_chunked.run(pack, stim, silenced=silenced, chunk=CHUNK,
                                               warmup=0, **kw),
+        # mx.compile rounds captured float constants (ml-explore/mlx#4503), so
+        # this lane only matches if they reach the compiled tick as arguments.
+        "compiled": lambda: engine_chunked.run(pack, stim, silenced=silenced, chunk=CHUNK,
+                                               warmup=0, compile_body=True, **kw),
         "metal": lambda: engine_metal.run(pack, stim, silenced=silenced, chunk=CHUNK,
                                           warmup=0, **kw),
         "fused": lambda: engine_fused.run(pack, stim, silenced=silenced, chunk=CHUNK,
@@ -59,7 +63,7 @@ def test_pack_is_consistent(pack):
     assert np.asarray(pack.signed_counts).all(), "no edge may carry a zero count"
 
 
-@pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
+@pytest.mark.parametrize("lane", ["chunked", "compiled", "metal", "fused"])
 def test_lane_matches_naive(pack, stim, lane):
     """Every optimisation must reproduce the baseline exactly -- the phase-3 gate."""
     ref = run_lane("naive", pack, stim)
@@ -112,10 +116,11 @@ def silencing_case(request, pack, stim):
     return case_stim, mask, base, ref
 
 
-@pytest.mark.parametrize("lane", ["chunked", "metal", "fused"])
+@pytest.mark.parametrize("lane", ["chunked", "compiled", "metal", "fused"])
 def test_silencing_matches_naive(pack, silencing_case, lane):
     """Two implementations of one semantics must agree: a masked copy of the
-    edge counts (naive, chunked) and empty edge ranges in the kernel (metal, fused).
+    edge counts (naive, chunked, compiled) and empty edge ranges in the kernel
+    (metal, fused).
     Recorded, so the spike events are compared too."""
     case_stim, mask, _, ref = silencing_case
     got = run_lane(lane, pack, case_stim, silenced=mask, record=True)
