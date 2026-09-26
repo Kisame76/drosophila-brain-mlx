@@ -142,9 +142,12 @@ Densely with early exits is often fine. My propagation kernel dispatches all
 instruction. The *dispatch* stays dense and statically sized; only the memory
 traffic becomes sparse. That was enough to go from 19.6 s to 0.75 s, by far the
 largest single step in the project. The early exit is what changed, not the
-scatter: the kernel accumulates with integer atomics too, but only along the rows
-that fired instead of over all 14.7 M edges. How a hand-written dense scatter
-compares with `scatter_add` at equal work I have not measured.
+scatter. At equal work the two are the same: scattering all 14.7 M edges took
+1.1610 ms per step with `.at[].add()` and 1.1463 ms with a hand-written kernel
+doing one integer atomic per edge (median of 15 evals of 8 scatters each, with
+identical sums). The scatter was only about half of the dense propagation, which
+took 2.1404 ms with the gather and the `where` in front of it. The kernel wins by
+running its atomics only along the rows that fired.
 
 ## 5. `mx.compile` can break bit-reproducibility, through its constants
 

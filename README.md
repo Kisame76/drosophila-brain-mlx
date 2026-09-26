@@ -647,7 +647,9 @@ get contracted, which is why the fused lane sets `#pragma clang fp contract(off)
 `scatter_add` with GPU atomics, at any size. What it cannot do is leave out the
 indices that carry nothing: sparse traffic needs the list of active edges first,
 and that list has a data-dependent size, which a lazy graph cannot express. That
-is why propagation here is an `mx.fast.metal_kernel` with an early exit.
+is why propagation here is an `mx.fast.metal_kernel` with an early exit. At equal
+work a hand-written scatter is no faster: 1.1463 ms against 1.1610 ms for
+`scatter_add` over all 14.7 M edges.
 
 ## Credit where it is due: flyBrain
 
