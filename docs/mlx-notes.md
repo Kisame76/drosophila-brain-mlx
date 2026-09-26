@@ -107,31 +107,44 @@ Two consequences:
   1.1 s of pure floor before any arithmetic. This is the real reason to chunk,
   and it is a much smaller effect than §2.
 
-## 4. There is no accumulating scatter
+## 4. The accumulating scatter is `.at[].add()`, and it cannot skip work
 
-In MLX 0.32.2 there is no `bincount`, no `segment_sum`, no `index_add`, no
-public `scatter_add`, and no `mx.scatter`. `arr[idx] = vals` with repeated
-indices is **last-write-wins**, which silently gives you a wrong answer rather
-than an error.
+`arr[idx] = vals` with repeated indices is **last-write-wins**, which silently
+gives you a wrong answer rather than an error. The accumulating form is
+`arr.at[idx].add(vals)`. It lowers to `scatter_add`, which runs on the GPU with
+atomic adds, and it is the intended path at any size: MLX 0.32.2 has no separate
+`bincount`, `segment_sum`, `index_add`, public `scatter_add` or `mx.scatter`.
+This section used to be headed "There is no accumulating scatter", which was
+wrong; a [reply on the MLX discussion](https://github.com/ml-explore/mlx/discussions/4512#discussioncomment-18604765)
+corrected it.
 
-What exists:
+What `.at[].add()` cannot do is skip work: it touches every index it is given.
+The baseline here propagated with it densely, gathering the delayed spike mask
+for all 14.7 M edges, zeroing the inactive ones and scatter-adding all 14.7 M
+onto 127,400 destinations (`engine_chunked.py`). That costs the same however few
+neurons fired, which is why the runtime was flat across a 5,000x range of
+activity (§1). No host read was involved.
 
-- `arr.at[idx].add(vals)` accumulates correctly. Use it when `idx` is small.
-  In this workload, scattering ~100 values via a full `zeros(N)` buffer and a
-  mask cost 20 % of the step; `.at[].add()` on the 100 indices removed that.
-- `mx.fast.metal_kernel` with atomics, for anything large or irregular.
+Making that traffic sparse needs the list of active edges first, and **that list
+has a data-dependent size, which a lazy graph cannot express.** You cannot write
+"the indices where `x` is true" in MLX and get an array sized to the answer;
+producing it means reading a count back to the host, the synchronisation that
+chunking exists to avoid. So:
 
-**The deeper limitation:** compaction has a data-dependent output size, and a
-lazy graph cannot express one. You cannot write "the indices where `x` is true"
-in MLX and get an array sized to the answer. Any algorithm whose shape depends
-on values has to become a hand-written kernel, or be done densely with early
-exits.
+- `arr.at[idx].add(vals)` when the index set is fixed. In this workload,
+  scattering ~100 values via a full `zeros(N)` buffer and a mask cost 20 % of the
+  step; `.at[].add()` on the 100 indices removed that.
+- `mx.fast.metal_kernel` when only a data-dependent subset of the indices carries
+  work: dispatch densely and exit early.
 
 Densely with early exits is often fine. My propagation kernel dispatches all
 127,400 threads every step and 127,300 of them return on their second
 instruction. The *dispatch* stays dense and statically sized; only the memory
 traffic becomes sparse. That was enough to go from 19.6 s to 0.75 s, by far the
-largest single step in the project.
+largest single step in the project. The early exit is what changed, not the
+scatter: the kernel accumulates with integer atomics too, but only along the rows
+that fired instead of over all 14.7 M edges. How a hand-written dense scatter
+compares with `scatter_add` at equal work I have not measured.
 
 ## 5. `mx.compile` can break bit-reproducibility, through its constants
 

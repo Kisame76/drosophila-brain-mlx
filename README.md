@@ -641,10 +641,12 @@ Until 2026-09-25 this README blamed FMA contraction, which was wrong:
 across them. A hand-written kernel that writes `a*b + c` as one expression does
 get contracted, which is why the fused lane sets `#pragma clang fp contract(off)`.
 
-**There is no accumulating scatter.** MLX 0.32.2 has no `bincount`,
-`segment_sum`, `index_add` or public `scatter_add`, and `arr[idx] = vals` is
-last-write-wins, not accumulation. `arr.at[idx].add()` and `mx.fast.metal_kernel`
-are the only options.
+**The accumulating scatter is `.at[].add()`, and it cannot skip work.**
+`arr[idx] = vals` is last-write-wins; `arr.at[idx].add()` accumulates, through
+`scatter_add` with GPU atomics, at any size. What it cannot do is leave out the
+indices that carry nothing: sparse traffic needs the list of active edges first,
+and that list has a data-dependent size, which a lazy graph cannot express. That
+is why propagation here is an `mx.fast.metal_kernel` with an early exit.
 
 ## Credit where it is due: flyBrain
 
